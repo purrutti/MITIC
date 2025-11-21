@@ -1,0 +1,61 @@
+﻿<Window x:Class="Appli_CocoriCO2.AlarmsListWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Appli_CocoriCO2"
+        mc:Ignorable="d"
+        Title="Alarms List" Height="450" Width="800" Closing="Window_Closing">
+    <ListView x:Name="AlarmsList" SelectionMode="Extended" Margin="10,10,2,8" GridViewColumnHeader.Click="lvColumnHeader_Click">
+        <ListView.Resources>
+            <Style TargetType="{x:Type ListViewItem}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding raised}"
+                      Value="true">
+                        <Setter Property="Background"
+                  Value="Red" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ListView.Resources>
+        <ListView.DataContext>
+            <local:Alarme/>
+        </ListView.DataContext>
+        <ListView.View>
+            <GridView>
+                <GridViewColumn  Width="200">
+                    <GridViewColumnHeader Tag="libelle">Name</GridViewColumnHeader>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding libelle}" TextAlignment="Right" />
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Width="50">
+                    <GridViewColumnHeader Tag="raised">Status</GridViewColumnHeader>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding raised}" TextAlignment="Right" />
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Width="200">
+                    <GridViewColumnHeader Tag="dtRaised">Last Raised Time</GridViewColumnHeader>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding dtRaised}" TextAlignment="Right" />
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+                <GridViewColumn Width="200">
+                    <GridViewColumnHeader Tag="ack">Acknowledge</GridViewColumnHeader>
+                    <GridViewColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="Acknowledge" Click="btnAckClick" Tag="{Binding libelle}"></Button>
+                        </DataTemplate>
+                    </GridViewColumn.CellTemplate>
+                </GridViewColumn>
+            </GridView>
+        </ListView.View>
+    </ListView>
+</Window>

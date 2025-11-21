@@ -1,0 +1,223 @@
+﻿<Window x:Class="Appli_CocoriCO2.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Appli_CocoriCO2"
+        DataContext="{Binding RelativeSource={RelativeSource Self}}"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="1090" Width="1975" Closing="Window_Closing" MinHeight="822"
+        MinWidth="1330.5"
+        WindowState="Maximized">
+
+    <Grid HorizontalAlignment="Stretch" Margin="10,10,10,0" Width="Auto">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="10*"/>
+            <ColumnDefinition Width="47*"/>
+        </Grid.ColumnDefinitions>
+
+        <Menu Height="20" Margin="0,0,0,0" VerticalAlignment="Top" Grid.ColumnSpan="2">
+            <MenuItem Header="_File">
+                <MenuItem Name="Exit" Header="_Exit" Click="Exit_Click" />
+            </MenuItem>
+            <MenuItem Header="_Settings">
+                <MenuItem Name="AppSettings_btn" Header="Application Settings" Click="AppSettings_Click" />
+                <MenuItem Name="ExpSettings_btn" Header="Experiment Settings" Click="ExpSettings_Click" />
+                <MenuItem Name="AlarmsSettings_btn" Header="Alarms Settings" Click="AlarmsSettings_Click" />
+                <MenuItem Name="ReferenceCTD_btn" Header="CTD Reference" Click="ReferenceCTD_Click" />
+            </MenuItem>
+            <MenuItem Header="_Maintenance">
+                <MenuItem Name="Calibrate_btn" Header="_Calibrate sensors" Click="Calibrate_btn_Click"/>
+                <MenuItem Name="ComDebug_btn" Header="Communication Debug" Click="ComDebug_Click" />
+                <Separator HorizontalAlignment="Left" Height="0" Width="208"/>
+                <MenuItem Name="Cleanup_btn" Header="Clean Up" Click="CleanUp_Click" />
+            </MenuItem>
+            <MenuItem Header="_Data">
+                <MenuItem Name="Monitoring_btn" Header="_Live Monitoring" Click="Monitoring_btn_Click"/>
+                <MenuItem x:Name="RData" Header="_Historical Data" Click="RData_btn_Click"/>
+                <MenuItem Name="AlarmsList_btn" Header="Alarms List" Click="AlarmsList_Click" />
+                <MenuItem Name="Desalinator_btn" Header="_Desalinator" Click="Desalinator_btn_Click" />
+                <MenuItem Name="Salinity_btn" Header="_Salinity Regulation" Click="Salinity_btn_Click" />
+            </MenuItem>
+            <MenuItem Header="_About">
+            </MenuItem>
+        </Menu>
+        <StatusBar x:Name="statusBar" Height="26" VerticalAlignment="Bottom" Grid.ColumnSpan="2" Margin="32,0,-32,0">
+            <StatusBarItem Height="24" VerticalAlignment="Bottom" Width="214" HorizontalAlignment="Left">
+                <TextBlock Name="statusLabel" />
+            </StatusBarItem>
+            <StatusBarItem Height="24" VerticalAlignment="Bottom" Width="347" HorizontalAlignment="Left">
+                <TextBlock x:Name="statusLabel1" />
+            </StatusBarItem>
+            <StatusBarItem Height="24" VerticalAlignment="Bottom" Width="347" HorizontalAlignment="Right">
+                <TextBlock x:Name="statusLabel3" />
+            </StatusBarItem>
+            <StatusBarItem Height="24" VerticalAlignment="Bottom" Width="347" HorizontalAlignment="Right">
+                <TextBlock x:Name="statusLabel2" />
+            </StatusBarItem>
+        </StatusBar>
+        <Canvas Margin="0,50,0,26" Grid.ColumnSpan="2">
+            <Image Source="/MITIC - P&amp;ID Container.png" Canvas.Left="41" Canvas.Top="17" HorizontalAlignment="Left" VerticalAlignment="Top" Height="926" Width="1904" Cursor=""/>
+            <Rectangle Canvas.Left="251" Canvas.Top="88" Width="115" Height="126" Fill="Transparent" Cursor="Hand" MouseDown="Ellipse_MouseDown_1"/>
+            <Label x:Name="label_C1_Temp_sortiePID" Content="V3V: ...." HorizontalAlignment="Center" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="626" Canvas.Top="278" />
+            <Label x:Name="label_C0_Salinity_Tank" Content="Salinity: ...." HorizontalAlignment="Center" Width="138" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="103" />
+            <Label x:Name="label_C1_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="309" />
+            <Label x:Name="label_C0M1_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="159"/>
+            <Label x:Name="label_C0M1_Temp" Content="Temperature: ...." HorizontalAlignment="Center" Width="136" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="179"/>
+            <Label x:Name="label_C0M1_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="124"/>
+            <Label x:Name="label_C1_Temp" Content="T°C: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="325" />
+            <Label x:Name="label_C1_Salinity" Content="Salinity: ...." HorizontalAlignment="Left" Width="138" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="341" />
+            <Label x:Name="label_C1_pH_sortiePID" Content="Pump: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="1017" Canvas.Top="389" />
+            <Label x:Name="label_C1_pH_setpoint" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="612" Canvas.Top="398" />
+            <Label x:Name="label_C1_Temp_setpoint" Content="T°C: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="612" Canvas.Top="414" />
+            <Label Content="Condition 1 set points" HorizontalAlignment="Left" Width="154" Height="28" VerticalAlignment="Top" Canvas.Left="600" Canvas.Top="380" />
+            <Label x:Name="label_C0M2_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="159"/>
+            <Label x:Name="label_C0M2_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="136" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="179"/>
+            <Label x:Name="label_C0M2_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="124"/>
+            <Label x:Name="label_C0M3_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="159"/>
+            <Label x:Name="label_C0M3_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="138" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="179"/>
+            <Label x:Name="label_C0M3_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="124"/>
+            <Label x:Name="label_C1M1_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="377"/>
+            <Label x:Name="label_C1M1_Temp" Content="Temperature: ...." HorizontalAlignment="Center" Width="136" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="397"/>
+            <Label x:Name="label_C1M1_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="342"/>
+            <Label x:Name="label_C1M2_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="377"/>
+            <Label x:Name="label_C1M2_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="136" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="397"/>
+            <Label x:Name="label_C1M2_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="342"/>
+            <Label x:Name="label_C1M3_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="377"/>
+            <Label x:Name="label_C1M3_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="138" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="397"/>
+            <Label x:Name="label_C1M3_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="342"/>
+            <Label x:Name="label_C2M1_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="592"/>
+            <Label x:Name="label_C2M1_Temp" Content="Temperature: ...." HorizontalAlignment="Center" Width="136" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="612"/>
+            <Label x:Name="label_C2M1_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="558"/>
+            <Label x:Name="label_C2M2_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="592"/>
+            <Label x:Name="label_C2M2_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="136" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="612"/>
+            <Label x:Name="label_C2M2_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="558"/>
+            <Label x:Name="label_C2M3_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="592"/>
+            <Label x:Name="label_C2M3_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="138" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="612"/>
+            <Label x:Name="label_C2M3_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="558"/>
+            <Label x:Name="label_C3M1_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="804"/>
+            <Label x:Name="label_C3M1_Temp" Content="Temperature: ...." HorizontalAlignment="Center" Width="136" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="824"/>
+            <Label x:Name="label_C3M1_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Center" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="768"/>
+            <Label x:Name="label_C3M2_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="804"/>
+            <Label x:Name="label_C3M2_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="136" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="824"/>
+            <Label x:Name="label_C3M2_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="768"/>
+            <Label x:Name="label_C3M3_pH" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="804"/>
+            <Label x:Name="label_C3M3_Temp" Content="Temperature: ...." HorizontalAlignment="Left" Width="138" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="824"/>
+            <Label x:Name="label_C3M3_Flowrate" Content="Flowrate: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="768"/>
+            <Label x:Name="label_C0_pH_setpoint" Content="pH setpoint: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="20" Canvas.Top="133" />
+            <Label x:Name="label_C0_pH_CO2" Content="pH measure: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="20" Canvas.Top="149" />
+            <Label x:Name="label_C0_Temp" Content="T°C: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="390" />
+            <Label x:Name="label_C0_pH" Content="pH: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="410" />
+            <Label x:Name="label_CTD_O2" Content="CTD O2: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="480" />
+            <Label x:Name="label_CTD_PSU" Content="CTD PSU: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="461" />
+            <Label x:Name="label_Amb" Content="Ambient Conditions" HorizontalAlignment="Center" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="10" Canvas.Top="368" FontWeight="Bold" />
+            <Label x:Name="label_C0_pH_sortiePID" Content="Valve: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="10" Canvas.Top="207" />
+            <Label x:Name="label_C2_Temp_sortiePID" Content="V3V: ...." HorizontalAlignment="Center" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="626" Canvas.Top="485" />
+            <Label x:Name="label_C2_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="524" />
+            <Label x:Name="label_C2_Temp" Content="T°C: ...." HorizontalAlignment="Center" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="540" />
+            <Label x:Name="label_C2_Salinity" Content="Salinity: ...." HorizontalAlignment="Center" Width="138" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="556" />
+            <Label x:Name="label_C2_pH_sortiePID" Content="Pump: ...." HorizontalAlignment="Center" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="1017" Canvas.Top="602" />
+            <Label x:Name="label_C2_pH_setpoint" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="607" Canvas.Top="623" />
+            <Label x:Name="label_C2_Temp_setpoint" Content="T°C: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="607" Canvas.Top="639" />
+            <Label Content="Condition 2 set points" HorizontalAlignment="Left" Width="153" Height="28" VerticalAlignment="Top" Canvas.Left="595" Canvas.Top="605" />
+            <Label x:Name="label_C3_Temp_sortiePID" Content="V3V: ...." HorizontalAlignment="Center" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="628" Canvas.Top="712" />
+            <Label x:Name="label_C3_pH" Content="pH: ...." HorizontalAlignment="Center" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="953" Canvas.Top="746" />
+            <Label x:Name="label_C3_Temp" Content="T°C: ...." HorizontalAlignment="Center" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="953" Canvas.Top="762" />
+            <Label x:Name="label_C3_Salinity" Content="Salinity: ...." HorizontalAlignment="Center" Width="138" Height="28" VerticalAlignment="Top" Canvas.Left="953" Canvas.Top="778" />
+            <Label x:Name="label_C3_pH_sortiePID" Content="Pump: ...." HorizontalAlignment="Center" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="1017" Canvas.Top="820" />
+            <Label x:Name="label_C3_pH_setpoint" Content="pH: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="567" Canvas.Top="835" />
+            <Label x:Name="label_C3_Temp_setpoint" Content="T°C: ...." HorizontalAlignment="Left" Width="118" Height="28" VerticalAlignment="Top" Canvas.Left="567" Canvas.Top="851" />
+            <Label Content="Condition 3 set points" HorizontalAlignment="Left" Width="153" Height="28" VerticalAlignment="Top" Canvas.Left="555" Canvas.Top="817" />
+
+            <Label x:Name="label_C0M1_Alarm" Content="Alarm: ...." HorizontalAlignment="Center" Width="203" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="209"/>
+            <Label x:Name="label_C0M2_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="209"/>
+            <Label x:Name="label_C0M3_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="209"/>
+            <Label x:Name="label_C1M1_Alarm" Content="Alarm: ...." HorizontalAlignment="Center" Width="203" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="427"/>
+            <Label x:Name="label_C1M2_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="427"/>
+            <Label x:Name="label_C1M3_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="427"/>
+            <Label x:Name="label_C2M1_Alarm" Content="Alarm: ...." HorizontalAlignment="Center" Width="203" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="642"/>
+            <Label x:Name="label_C2M2_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="642"/>
+            <Label x:Name="label_C2M3_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="642"/>
+            <Label x:Name="label_C3M1_Alarm" Content="Alarm: ...." HorizontalAlignment="Center" Width="203" Height="30" VerticalAlignment="Top" Canvas.Left="1202" Canvas.Top="854"/>
+            <Label x:Name="label_C3M2_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1474" Canvas.Top="854"/>
+            <Label x:Name="label_C3M3_Alarm" Content="Alarm: ...." HorizontalAlignment="Left" Width="203" Height="30" VerticalAlignment="Center" Canvas.Left="1744" Canvas.Top="854"/>
+            <Label x:Name="label_time" Content="Time: ...." Canvas.Left="1631" Width="180" Canvas.Top="-22"/>
+            <Label x:Name="label_ledstate" Content="LED state: Day" Canvas.Left="1631" Width="202" Canvas.Top="5"/>
+            <Label x:Name="label_EA_pressure_setpoint" Content="Pressure setpoint: ...." HorizontalAlignment="Left" Width="172" Height="28" VerticalAlignment="Top" Canvas.Left="136" Canvas.Top="607" />
+            <Label x:Name="label_EA_pressure_measure" Content="Pressure measure: ...." HorizontalAlignment="Left" Width="172" Height="28" VerticalAlignment="Top" Canvas.Left="136" Canvas.Top="623" />
+            <Label x:Name="label_EC_pressure_setpoint" Content="Pressure setpoint: ...." HorizontalAlignment="Left" Width="172" Height="28" VerticalAlignment="Top" Canvas.Left="330" Canvas.Top="814" />
+            <Label x:Name="label_EC_pressure_measure" Content="Pressure measure: ...." HorizontalAlignment="Left" Width="172" Height="28" VerticalAlignment="Top" Canvas.Left="330" Canvas.Top="830" />
+            <Label x:Name="label_EA_sortiePID" Content="Valve: ...." HorizontalAlignment="Left" Width="172" Height="29" VerticalAlignment="Top" Canvas.Left="136" Canvas.Top="640" />
+            <Label x:Name="label_EC_sortiePID" Content="Valve: ...." HorizontalAlignment="Left" Width="172" Height="29" VerticalAlignment="Top" Canvas.Left="330" Canvas.Top="847" />
+            <Label x:Name="label_Amb_Copy" Content="Ambient Water Inlet" HorizontalAlignment="Left" Width="160" Height="28" VerticalAlignment="Top" Canvas.Left="136" Canvas.Top="585" FontWeight="Bold" />
+            <Label x:Name="label_Amb_Copy1" Content="Warm Water Inlet" HorizontalAlignment="Left" Width="160" Height="28" VerticalAlignment="Top" Canvas.Left="47" Canvas.Top="765" FontWeight="Bold" />
+            <Label x:Name="label_C0_Salinity" Content="Salinity: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="429" />
+            <Label x:Name="label_C0_CTD_Salinity" Content="CTD Salinity: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="500" />
+            <Label x:Name="label_C0_CTD_Temperature" Content="CTD Temperature: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="16" Canvas.Top="524" />
+            <Label x:Name="label_C0_mixing_tank_Temp" Content="T°C: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="86" />
+            <Label x:Name="label_C0_mixing_tank_pH" Content="pH: ...." HorizontalAlignment="Center" Width="163" Height="28" VerticalAlignment="Top" Canvas.Left="950" Canvas.Top="67" />
+
+            <Border BorderBrush="Black" BorderThickness="1" Height="213" Canvas.Left="10" Canvas.Top="344" Width="169" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label x:Name="label_nextSunUp" Content="LED state: Day" Canvas.Left="1631" Width="202" Canvas.Top="23"/>
+            <Label x:Name="label_nextSunDown" Content="LED state: Day" Canvas.Left="1631" Width="202" Canvas.Top="41"/>
+            <Image Height="138" Source="cocologo.jpg" Stretch="Fill" Width="169" Canvas.Top="-28" Canvas.Left="-7"/>
+            <Label x:Name="label_EC_temperature_setpoint" Content="Temperature setpoint: ...." HorizontalAlignment="Left" Width="194" Height="28" VerticalAlignment="Top" Canvas.Top="833" Canvas.Left="98" />
+            <Label x:Name="label_EC_temperature_measure" Content="Temperature measure: ...." HorizontalAlignment="Left" Width="194" Height="28" VerticalAlignment="Top" Canvas.Top="849" Canvas.Left="98" />
+            <Label x:Name="label_TEC_sortiePID" Content="Valve: ...." HorizontalAlignment="Left" Width="194" Height="29" VerticalAlignment="Top" Canvas.Top="866" Canvas.Left="98" />
+            <Label Content="C0 M0" Canvas.Left="1231" Canvas.Top="101" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label Content="C1 M0" Canvas.Left="1231" Canvas.Top="319" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label Content="C2 M0" Canvas.Left="1231" Canvas.Top="535" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label Content="C3 M0" Canvas.Left="1231" Canvas.Top="745" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label Content="C1 M1" Canvas.Left="1500" Canvas.Top="319" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Canvas.Left="1197" Canvas.Top="476" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+            <Label Content="C2 M1" Canvas.Left="1500" Canvas.Top="535" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C3 M1" Canvas.Left="1500" Canvas.Top="745" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C1 M2" Canvas.Left="1774" Canvas.Top="319" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C2 M2" Canvas.Left="1774" Canvas.Top="535" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C3 M2" Canvas.Left="1774" Canvas.Top="745" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C0 M1" Canvas.Left="1500" Canvas.Top="101" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label Content="C0 M2" Canvas.Left="1774" Canvas.Top="101" FontWeight="Bold" FontSize="20" Width="71" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            <Label x:Name="label_Salinity_V3V_C0" Content="V3V: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="41" />
+            <Label x:Name="label_Salinity_Setpoint_C0" Content="Setpoint: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="153" />
+            <Label x:Name="label_Salinity_Flowrate_C0" Content="Flowrate: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="173" />
+            <Label x:Name="label_Salinity_Ratio_C0" Content="Ratio: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="193" />
+            <Label x:Name="label_Salinity_V3V_C1" Content="V3V: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Center" Canvas.Left="793" Canvas.Top="278" />
+            <Label x:Name="label_Salinity_Setpoint_C1" Content="Setpoint: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="376" />
+            <Label x:Name="label_Salinity_Flowrate_C1" Content="Flowrate: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="396" />
+            <Label x:Name="label_Salinity_Ratio_C1" Content="Ratio: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="416" />
+            <Label x:Name="label_Salinity_V3V_C2" Content="V3V: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="740" Canvas.Top="455" />
+            <Label x:Name="label_Salinity_Setpoint_C2" Content="Setpoint: ...." HorizontalAlignment="Left" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="740" Canvas.Top="474" />
+            <Label x:Name="label_Salinity_Flowrate_C2" Content="Flowrate: ...." HorizontalAlignment="Left" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="740" Canvas.Top="494" />
+            <Label x:Name="label_Salinity_Ratio_C2" Content="Ratio: ...." HorizontalAlignment="Left" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="740" Canvas.Top="514" />
+            <Label x:Name="label_Salinity_V3V_C2_filtre" Content="V3V filtre: ...." HorizontalAlignment="Left" Width="118" Height="30" VerticalAlignment="Top" Canvas.Left="852" Canvas.Top="606" />
+            <Label x:Name="label_Salinity_Setpoint_C2_filtre" Content="Setpoint: ...." HorizontalAlignment="Left" Width="138" Height="30" VerticalAlignment="Top" Canvas.Left="852" Canvas.Top="626" />
+            <Label x:Name="label_Salinity_V3V_C3" Content="V3V: ...." HorizontalAlignment="Left" Width="118" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="712" />
+            <Label x:Name="label_Salinity_Setpoint_C3" Content="Setpoint: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="814" />
+            <Label x:Name="label_Salinity_Flowrate_C3" Content="Flowrate: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="834" />
+            <Label x:Name="label_Salinity_Ratio_C3" Content="Ratio: ...." HorizontalAlignment="Center" Width="138" Height="29" VerticalAlignment="Top" Canvas.Left="793" Canvas.Top="854" />
+            <Label Content="Filtered water" Canvas.Left="730" Canvas.Top="633" FontStyle="Italic" Foreground="#FF0F616E"/>
+            <Label Content="Filtered water" Canvas.Left="699" Canvas.Top="788" FontStyle="Italic" Foreground="#FF0F616E"/>
+            <Label Content="Filtered water" Canvas.Left="673" Canvas.Top="120" FontStyle="Italic" Foreground="#FF0F616E"/>
+            <Label Content="Fresh water" Canvas.Left="723" Canvas.Top="584" FontStyle="Italic" Foreground="#FF0F616E"/>
+            <Label Content="Brine" Canvas.Left="730" Canvas.Top="349" FontStyle="Italic" Foreground="#FF0F616E"/>
+            <Label Content="C0: Control" Canvas.Left="371" Canvas.Top="101" FontWeight="Bold"/>
+            <Label Content="C1: 2035 + Brine" Canvas.Left="371" Canvas.Top="309" FontWeight="Bold"/>
+            <Label Content="C2: 2035 + Fresh water" Canvas.Left="371" FontWeight="Bold" Canvas.Top="510"/>
+            <Label Content="C3: 2035" Canvas.Left="371" FontWeight="Bold" Canvas.Top="712"/>
+        </Canvas>
+        <Border BorderBrush="Black" BorderThickness="1" Grid.Column="1" HorizontalAlignment="Left" Height="97" Margin="1278,25,0,0" VerticalAlignment="Top" Width="255">
+            <Image Margin="200,4,4,49" Source="Image1.png" Stretch="Fill"/>
+        </Border>
+        <!--<Image Margin="10,25,0,0" Source="CocoriCO2 - P&amp;ID Container.png" Width="1280" Height="720" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+        
+        
+        
+        -->
+
+
+
+
+
+
+    </Grid>
+</Window>

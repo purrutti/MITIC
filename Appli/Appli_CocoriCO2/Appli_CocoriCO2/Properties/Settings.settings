@@ -1,0 +1,102 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="Appli_CocoriCO2.Properties" GeneratedClassName="Settings">
+  <Profiles />
+  <Settings>
+    <Setting Name="MasterIPAddress" Type="System.String" Scope="User">
+      <Value Profile="(Default)">192.168.1.1</Value>
+    </Setting>
+    <Setting Name="dataQueryInterval" Type="System.Int32" Scope="User">
+      <Value Profile="(Default)">1</Value>
+    </Setting>
+    <Setting Name="dataLogInterval" Type="System.String" Scope="User">
+      <Value Profile="(Default)">1</Value>
+    </Setting>
+    <Setting Name="dataFileBasePath" Type="System.String" Scope="User">
+      <Value Profile="(Default)">C:/CocoriCO2/CocoriCO2_CRCBN</Value>
+    </Setting>
+    <Setting Name="ftpUsername" Type="System.String" Scope="User">
+      <Value Profile="(Default)">cocorico2</Value>
+    </Setting>
+    <Setting Name="ftpPassword" Type="System.String" Scope="User">
+      <Value Profile="(Default)">C0q2Ch0c@2021</Value>
+    </Setting>
+    <Setting Name="ftpDir" Type="System.String" Scope="User">
+      <Value Profile="(Default)">ftp.obs-vlfr.fr/CRCBN/</Value>
+    </Setting>
+    <Setting Name="InfluxDBWebpage" Type="System.String" Scope="User">
+      <Value Profile="(Default)">http://localhost:8086/orgs/de9be6257a0a3477/dashboards/077b31f0db0d2000?lower=now%28%29%20-%207d</Value>
+    </Setting>
+    <Setting Name="InfluxDBToken" Type="System.String" Scope="User">
+      <Value Profile="(Default)">eUNDgxqrwAFsb6pjOdqGkW-Qr9NxorO5WQamvvgtquXFJgUz1tyG2Ee-G7HhI_IKk9L3JavnAoxrMZ5evLs9Ig==</Value>
+    </Setting>
+    <Setting Name="InfluxDBBucket" Type="System.String" Scope="User">
+      <Value Profile="(Default)">CocoriCO2</Value>
+    </Setting>
+    <Setting Name="InfluxDBOrg" Type="System.String" Scope="User">
+      <Value Profile="(Default)">CNRS</Value>
+    </Setting>
+    <Setting Name="RDataWebpage" Type="System.String" Scope="User">
+      <Value Profile="(Default)">http://www.obs-vlfr.fr/~gazeau/FACE-IT/FACE-IT.html</Value>
+    </Setting>
+    <Setting Name="FluoSlope" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="FluoOffset" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="SlackToken" Type="System.String" Scope="User">
+      <Value Profile="(Default)">YOUR_SLACK_TOKEN_HERE</Value>
+    </Setting>
+    <Setting Name="SlackChannelID" Type="System.String" Scope="User">
+      <Value Profile="(Default)">#CRCM</Value>
+    </Setting>
+    <Setting Name="AlarmLevelH" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmLevelL" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmLevelLL" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmPressure" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmpHCondition" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmTempCondition" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmFlowrate" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmpHMesocosm" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="AlarmTempMesocosm" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="PressureDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="FlowrateDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="FlowrateSetpoint" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="ConditionpHDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="ConditionTempDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="MesocosmpHDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="MesocosmTempDelta" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+  </Settings>
+</SettingsFile>
