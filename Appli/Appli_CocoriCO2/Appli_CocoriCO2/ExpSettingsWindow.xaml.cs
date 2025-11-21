@@ -234,12 +234,14 @@ namespace Appli_CocoriCO2
                         if (Double.TryParse(tb_pH_Ki.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC0.Ki = dTemp;
                         if (Double.TryParse(tb_pH_Kd.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC0.Kd = dTemp;
 
-                        if (Double.TryParse(tb_Temp_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.consigne = dTemp;
+
+                        if (Double.TryParse(tb_dT_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.offset = dTemp;
+                        MW.salinityRegulParams.regulSaliniteC1.consigne = Math.Round(MW.salinityRegulParams.regulSaliniteC1.offset + MW.salinityData.saliniteC0,2);
+                        //if (Double.TryParse(tb_Temp_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.consigne = dTemp;
                         if (Double.TryParse(tb_Temp_Kp.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.Kp = dTemp;
                         if (Double.TryParse(tb_Temp_Ki.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.Ki = dTemp;
                         if (Double.TryParse(tb_Temp_Kd.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.Kd = dTemp;
 
-                        if (Double.TryParse(tb_dT_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC1.offset = dTemp;
 
                         if (Double.TryParse(tb_pH_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC0.consigne = dTemp;
 
@@ -249,10 +251,10 @@ namespace Appli_CocoriCO2
                             cID = 8,
                             sID = 4,//Server
                             regulC0 = MW.salinityRegulParams.regulSaliniteC0,
-                            regulC1 = MW.salinityRegulParams.regulSaliniteC1,
-                            regulC2 = MW.salinityRegulParams.regulSaliniteC2,
+                            regulC1 = MW.salinityRegulParams.regulSaliniteC1
+                            /*regulC2 = MW.salinityRegulParams.regulSaliniteC2,
                             regulC3 = MW.salinityRegulParams.regulSaliniteC3,
-                            regulC2_filtre = MW.salinityRegulParams.regulC2_filtre
+                            regulC2_filtre = MW.salinityRegulParams.regulC2_filtre*/
                         };
 
                         String s8 = JsonConvert.SerializeObject(response8);
@@ -273,21 +275,23 @@ namespace Appli_CocoriCO2
                         if (Double.TryParse(tb_pH_Ki.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC2.Ki = dTemp;
                         if (Double.TryParse(tb_pH_Kd.Text, out dTemp)) MW.salinityRegulParams.regulSaliniteC2.Kd = dTemp;
 
-                        if (Double.TryParse(tb_Temp_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.consigne = dTemp;
+
+                        if (Double.TryParse(tb_dT_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.offset = dTemp;
+                        MW.salinityRegulParams.regulSaliniteC1.consigne = Math.Round(MW.salinityRegulParams.regulC2_filtre.offset + MW.salinityData.saliniteC0,2);
+
                         if (Double.TryParse(tb_Temp_Kp.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.Kp = dTemp;
                         if (Double.TryParse(tb_Temp_Ki.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.Ki = dTemp;
                         if (Double.TryParse(tb_Temp_Kd.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.Kd = dTemp;
-                        if (Double.TryParse(tb_dT_setPoint.Text, out dTemp)) MW.salinityRegulParams.regulC2_filtre.offset = dTemp;
 
                         var response9 = new
                         {
                             cmd = 18,
                             cID = 8,
                             sID = 4,//Server
-                            regulC0 = MW.salinityRegulParams.regulSaliniteC0,
-                            regulC1 = MW.salinityRegulParams.regulSaliniteC1,
+                            /*regulC0 = MW.salinityRegulParams.regulSaliniteC0,
+                            regulC1 = MW.salinityRegulParams.regulSaliniteC1,*/
                             regulC2 = MW.salinityRegulParams.regulSaliniteC2,
-                            regulC3 = MW.salinityRegulParams.regulSaliniteC3,
+                            /*regulC3 = MW.salinityRegulParams.regulSaliniteC3*/
                             regulC2_filtre = MW.salinityRegulParams.regulC2_filtre
                         };
 
@@ -310,11 +314,11 @@ namespace Appli_CocoriCO2
                             cmd = 18,
                             cID = 8,
                             sID = 4,//Server
-                            regulC0 = MW.salinityRegulParams.regulSaliniteC0,
+                            /*regulC0 = MW.salinityRegulParams.regulSaliniteC0,
                             regulC1 = MW.salinityRegulParams.regulSaliniteC1,
-                            regulC2 = MW.salinityRegulParams.regulSaliniteC2,
-                            regulC3 = MW.salinityRegulParams.regulSaliniteC3,
-                            regulC2_filtre = MW.salinityRegulParams.regulC2_filtre
+                            regulC2 = MW.salinityRegulParams.regulSaliniteC2,*/
+                            regulC3 = MW.salinityRegulParams.regulSaliniteC3
+                            /*regulC2_filtre = MW.salinityRegulParams.regulC2_filtre*/
                         };
 
                         String s10 = JsonConvert.SerializeObject(response10);
@@ -596,6 +600,9 @@ namespace Appli_CocoriCO2
                 tb_Temp_setPoint.IsEnabled = false;
 
 
+                label_dT.Content = "delta Salinity setpoint";
+
+
                 v = Visibility.Visible;
                 label_Temp_title.Visibility = v;
                 tb_dpH_setPoint.Visibility = Visibility.Hidden;
@@ -629,6 +636,8 @@ namespace Appli_CocoriCO2
                 label_Temp_measure.Content = "Salinity C2 measure";
                 tb_pH_setPoint.IsEnabled = false;
                 tb_Temp_setPoint.IsEnabled = false;
+
+                label_dT.Content = "delta Salinity setpoint";
 
 
                 v = Visibility.Visible;
@@ -724,6 +733,8 @@ namespace Appli_CocoriCO2
             else
 
             {
+
+                label_dT.Content = "delta T°C setpoint";
                 label_dpH.Content = "delta pHsetpoint";
                 label_pH_setpoint.Content = "pH setpoint";
                 label_Temp_setpoint.Content = "Temperature setpoint";

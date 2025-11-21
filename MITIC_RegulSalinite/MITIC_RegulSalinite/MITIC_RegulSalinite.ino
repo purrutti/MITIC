@@ -678,70 +678,81 @@ void sendParams() {
 }
 
 void receiveParams(StaticJsonDocument<600>& doc) {
+
     JsonObject regul = doc["regulC0"];
-    regulC0.consigne = regul["cons"];
-    regulC0.Kp = regul["Kp"];
-    regulC0.Ki = regul["Ki"];
-    regulC0.Kd = regul["Kd"];
+    if (doc.containsKey("regulC0")) {
+        JsonObject regul = doc["regulC0"];
+        regulC0.consigne = regul["cons"];
+        regulC0.Kp = regul["Kp"];
+        regulC0.Ki = regul["Ki"];
+        regulC0.Kd = regul["Kd"];
 
-    String aForcage = regul["aForcage"];
-    if (aForcage.compareTo("true") == 0) regulC0.autorisationForcage = true;
-    else regulC0.autorisationForcage = false;
-    regulC0.consigneForcage = regul["consForcage"];
-    regulC0.offset = regul["offset"];
-
-
-
-    regul = doc["regulC1"];
-    regulC1.consigne = regul["cons"];
-    regulC1.Kp = regul["Kp"];
-    regulC1.Ki = regul["Ki"];
-    regulC1.Kd = regul["Kd"];
-    String aForcage1 = regul["aForcage"];
+        String aForcage = regul["aForcage"];
+        if (aForcage.compareTo("true") == 0) regulC0.autorisationForcage = true;
+        else regulC0.autorisationForcage = false;
+        regulC0.consigneForcage = regul["consForcage"];
+        regulC0.offset = regul["offset"];
+    }
 
 
-    if (aForcage1.compareTo("true") == 0) regulC1.autorisationForcage = true;
-    else regulC1.autorisationForcage = false;
-    regulC1.consigneForcage = regul["consForcage"];
-    regulC1.offset = regul["offset"];
-
-    regul = doc["regulC2"];
-    regulC2.consigne = regul["cons"];
-    regulC2.Kp = regul["Kp"];
-    regulC2.Ki = regul["Ki"];
-    regulC2.Kd = regul["Kd"];
-    String aForcage2 = regul["aForcage"];
-    if (aForcage2.compareTo("true") == 0) regulC2.autorisationForcage = true;
-    else regulC2.autorisationForcage = false;
-    regulC2.consigneForcage = regul["consForcage"];
-    regulC2.offset = regul["offset"];
-
-    regul = doc["regulC3"];
-    regulC3.consigne = regul["cons"];
-    regulC3.Kp = regul["Kp"];
-    regulC3.Ki = regul["Ki"];
-    regulC3.Kd = regul["Kd"];
-    String aForcage3 = regul["aForcage"];
+    if (doc.containsKey("regulC1")) {
+        regul = doc["regulC1"];
+        //regulC1.consigne = regul["cons"];
+        regulC1.Kp = regul["Kp"];
+        regulC1.Ki = regul["Ki"];
+        regulC1.Kd = regul["Kd"];
+        String aForcage1 = regul["aForcage"];
 
 
-    if (aForcage3.compareTo("true") == 0) regulC3.autorisationForcage = true;
-    else regulC3.autorisationForcage = false;
-    regulC3.consigneForcage = regul["consForcage"];
-    regulC3.offset = regul["offset"];
+        if (aForcage1.compareTo("true") == 0) regulC1.autorisationForcage = true;
+        else regulC1.autorisationForcage = false;
+        regulC1.consigneForcage = regul["consForcage"];
+        regulC1.offset = regul["offset"];
+        regulC1.consigne = regulC1.offset + salinityData.saliniteC0;
+    }
 
-    regul = doc["regulC2_filtre"];
-    regulC2_filtre.consigne = regul["cons"];
-    regulC2_filtre.Kp = regul["Kp"];
-    regulC2_filtre.Ki = regul["Ki"];
-    regulC2_filtre.Kd = regul["Kd"];
-    String aForcage4 = regul["aForcage"];
+    if (doc.containsKey("regulC2")) {
+        regul = doc["regulC2"];
+        regulC2.consigne = regul["cons"];
+        regulC2.Kp = regul["Kp"];
+        regulC2.Ki = regul["Ki"];
+        regulC2.Kd = regul["Kd"];
+        String aForcage2 = regul["aForcage"];
+        if (aForcage2.compareTo("true") == 0) regulC2.autorisationForcage = true;
+        else regulC2.autorisationForcage = false;
+        regulC2.consigneForcage = regul["consForcage"];
+        regulC2.offset = regul["offset"];
+    }
+    if (doc.containsKey("regulC3")) {
+        regul = doc["regulC3"];
+        regulC3.consigne = regul["cons"];
+        regulC3.Kp = regul["Kp"];
+        regulC3.Ki = regul["Ki"];
+        regulC3.Kd = regul["Kd"];
+        String aForcage3 = regul["aForcage"];
 
 
-    if (aForcage4.compareTo("true") == 0) regulC2_filtre.autorisationForcage = true;
-    else regulC2_filtre.autorisationForcage = false;
-    regulC2_filtre.consigneForcage = regul["consForcage"];
-    regulC2_filtre.offset = regul["offset"];
+        if (aForcage3.compareTo("true") == 0) regulC3.autorisationForcage = true;
+        else regulC3.autorisationForcage = false;
+        regulC3.consigneForcage = regul["consForcage"];
+        regulC3.offset = regul["offset"];
+    }
+    if (doc.containsKey("regulC2_filtre")) {
+        regul = doc["regulC2_filtre"];
+        //regulC2_filtre.consigne = regul["cons"];
+        regulC2_filtre.Kp = regul["Kp"];
+        regulC2_filtre.Ki = regul["Ki"];
+        regulC2_filtre.Kd = regul["Kd"];
+        String aForcage4 = regul["aForcage"];
 
+
+        if (aForcage4.compareTo("true") == 0) regulC2_filtre.autorisationForcage = true;
+        else regulC2_filtre.autorisationForcage = false;
+        regulC2_filtre.consigneForcage = regul["consForcage"];
+        regulC2_filtre.offset = regul["offset"];
+
+        regulC2_filtre.consigne = regulC2_filtre.offset + salinityData.saliniteC0;
+    }
     int address = regulC0.save(EEPROMStartAddress);
     address = regulC1.save(address);
     address = regulC2.save(address);
