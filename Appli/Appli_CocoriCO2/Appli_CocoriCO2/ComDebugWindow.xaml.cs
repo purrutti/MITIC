@@ -329,6 +329,7 @@ namespace Appli_CocoriCO2
             // Desalinator Data writeDataPointAsync
             if (MW.desalinatorData != null)
             {
+                writeDataPointAsync(0, -1, "Desalinator.pressionHP", MW.desalinatorData.pressionHP, dt);
                 writeDataPointAsync(0, -1, "Desalinator.pressionEntree", MW.desalinatorData.pressionEntree, dt);
                 writeDataPointAsync(0, -1, "Desalinator.pressionFresh", MW.desalinatorData.pressionFresh, dt);
                 writeDataPointAsync(0, -1, "Desalinator.pressionSaumure", MW.desalinatorData.pressionSaumure, dt);

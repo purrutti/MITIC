@@ -41,6 +41,13 @@
         <CheckBox Content="Temperature outside +/-" HorizontalAlignment="Left" Margin="85,425,0,0" VerticalAlignment="Top" IsChecked="{Binding AlarmTempMesocosm, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}"/>
         <TextBox HorizontalAlignment="Left" Height="15" Margin="263,424,0,0" TextWrapping="Wrap"  x:Name="tb_SlackChannelID_Copy7" Text="{Binding MesocosmTempDelta, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}" VerticalAlignment="Top" Width="77" TextAlignment="Center"/>
         <Label Content="°C compared to setpoint" HorizontalAlignment="Left" Margin="336,420,0,0" VerticalAlignment="Top"/>
+        <Label Content="Salinity" HorizontalAlignment="Left" Margin="30,145,0,0" VerticalAlignment="Top" FontWeight="Bold"/>
+        <CheckBox Content="Pressure outside +/-" HorizontalAlignment="Left" Margin="85,176,0,0" VerticalAlignment="Top" IsChecked="{Binding AlarmPressureSalinity, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}"/>
+        <TextBox HorizontalAlignment="Left" Height="15" Margin="263,175,0,0" TextWrapping="Wrap"  x:Name="tb_PressureSalinity" Text="{Binding PressureSalinity, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}" VerticalAlignment="Top" Width="77" TextAlignment="Center"/>
+        <CheckBox Content="Salinity outside +/-" HorizontalAlignment="Left" Margin="85,198,0,0" VerticalAlignment="Top" IsChecked="{Binding AlarmSalinity, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}"/>
+        <TextBox HorizontalAlignment="Left" Height="15" Margin="263,197,0,0" TextWrapping="Wrap"  x:Name="tb_SalinityAlarmThreshold" Text="{Binding SalinityAlarmValue, Mode=TwoWay, Source={x:Static Properties:Settings.Default}}" VerticalAlignment="Top" Width="77" TextAlignment="Center"/>
+        <Label Content="compared to setpoint" HorizontalAlignment="Left" Margin="340,193,0,0" VerticalAlignment="Top"/>
+        <Label Content="bar compared to setpoint" HorizontalAlignment="Left" Margin="345,170,0,0" VerticalAlignment="Top"/>
 
     </Grid>
 </Window>

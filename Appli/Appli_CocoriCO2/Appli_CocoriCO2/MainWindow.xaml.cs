@@ -786,6 +786,25 @@ namespace Appli_CocoriCO2
             double d;
 
             string cond, meso;
+
+
+
+           
+
+            checkAlarme("Alarm Desalinator Pump Off", desalinatorData.pompeHP, true);
+
+            checkAlarme("Alarm Pressure Desalinator Inlet", desalinatorData.pressionEntree, desalinatorParams.regulPressionEntree.consigne);
+            checkAlarme("Alarm Pressure Desalinator Brine", desalinatorData.pressionSaumure, desalinatorParams.regulPressionSaumure.consigne);
+            checkAlarme("Alarm Pressure Desalinator Fresh", desalinatorData.pressionFresh, desalinatorParams.regulPressionFresh.consigne);
+            checkAlarme("Alarm Pressure Desalinator HP", desalinatorData.pressionHP, desalinatorParams.HP_threshold);
+
+            checkAlarme("Alarm Salinity C0", salinityData.saliniteC0, ambiantConditions.salinite);
+            checkAlarme("Alarm Salinity C1", salinityData.saliniteC1, salinityRegulParams.regulSaliniteC1.consigne);
+            checkAlarme("Alarm Salinity C2", salinityData.saliniteC2, salinityRegulParams.regulC2_filtre.consigne);
+            checkAlarme("Alarm Salinity C3", salinityData.saliniteC3, ambiantConditions.salinite);
+            checkAlarme("Alarm Salinity MOI", desalinatorData.salinity, desalinatorParams.regulRebouclage.consigne);
+
+
             checkAlarme("Alarm Pressure Ambient water", ambiantConditions.pressionEA, masterParams.regulPressionEA.consigne);
             checkAlarme("AlarmPressure Hot Water", ambiantConditions.pressionEC, masterParams.regulPressionEC.consigne);
 
@@ -876,6 +895,48 @@ namespace Appli_CocoriCO2
             Alarme b = new Alarme();
             b.set("Alarm Pressure Hot water", e, 2, d, TimeSpan.FromSeconds(30));
             alarms.Add(b);
+
+
+
+            Boolean.TryParse(Properties.Settings.Default["AlarmPressureSalinity"].ToString(), out e);
+            Double.TryParse(Properties.Settings.Default["PressureSalinity"].ToString(), out d);
+
+            Alarme pump = new Alarme();
+            pump.set("Alarm Desalinator Pump Off", e, 0, 0, TimeSpan.FromSeconds(30));
+            alarms.Add(pump);
+
+            Alarme ps1 = new Alarme();
+            ps1.set("Alarm Pressure Desalinator Inlet", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(ps1); 
+            Alarme ps2 = new Alarme();
+            ps2.set("Alarm Pressure Desalinator Brine", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(ps2);
+            Alarme ps3 = new Alarme();
+            ps3.set("Alarm Pressure Desalinator Fresh", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(ps3);
+
+            Alarme ps4 = new Alarme();
+            ps4.set("Alarm Pressure Desalinator HP", e, 0, 0, TimeSpan.FromSeconds(30));
+            alarms.Add(ps4);
+
+            Boolean.TryParse(Properties.Settings.Default["AlarmSalinity"].ToString(), out e);
+            Double.TryParse(Properties.Settings.Default["SalinityAlarmValue"].ToString(), out d);
+
+            Alarme s0 = new Alarme();
+            s0.set("Alarm Salinity C0", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(s0);
+            Alarme s1 = new Alarme();
+            s1.set("Alarm Salinity C1", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(s1);
+            Alarme s2 = new Alarme();
+            s2.set("Alarm Salinity C2", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(s2);
+            Alarme s3 = new Alarme();
+            s3.set("Alarm Salinity C3", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(s3);
+            Alarme s4 = new Alarme();
+            s4.set("Alarm Salinity MOI", e, 2, d, TimeSpan.FromSeconds(30));
+            alarms.Add(s4);
 
             for (int i = 0; i < 4; i++) //conditions
             {
@@ -1144,6 +1205,7 @@ namespace Appli_CocoriCO2
                             break;
 
                         case 12: // SEND_DESALINATOR_DATA
+                            bool prevPompeHPStatus = desalinatorData.pompeHP;
                             desalinatorData = JsonHelper.DeserializePreservingExisting<DesalinatorData>(data, desalinatorData);
                             desalinatorData.lastUpdated = DateTime.Now;
                             desalinatorParams.regulRebouclage.sortiePID_pc = desalinatorData.v3VMOI;
@@ -1151,6 +1213,32 @@ namespace Appli_CocoriCO2
                             desalinatorParams.regulPressionFresh.sortiePID_pc = desalinatorData.vanneFresh;
                             desalinatorParams.regulPressionEntree.sortiePID_pc = desalinatorData.vanneEntree;
                             lastDataReceived = DateTime.Now;
+
+                            if(!prevPompeHPStatus && prevPompeHPStatus != desalinatorData.pompeHP)
+                            {
+                                salinityRegulParams.regulSaliniteC0.autorisationForcage = true;
+                                salinityRegulParams.regulSaliniteC1.autorisationForcage = true;
+                                salinityRegulParams.regulSaliniteC2.autorisationForcage = true;
+                                salinityRegulParams.regulSaliniteC3.autorisationForcage = true;
+                                salinityRegulParams.regulC2_filtre.autorisationForcage = true;
+
+                                salinityRegulParams.regulSaliniteC0.consigneForcage = 100;
+                                salinityRegulParams.regulSaliniteC1.consigneForcage = 0;
+                                salinityRegulParams.regulSaliniteC2.consigneForcage = 100;
+                                salinityRegulParams.regulSaliniteC3.consigneForcage = 100;
+                                salinityRegulParams.regulC2_filtre.consigneForcage = 100;
+                                var responseForceVannes = new
+                                {
+                                    cmd = 18,
+                                    cID = t.cID,
+                                    sID = 4,//Server
+                                    regulRebouclage = desalinatorParams.regulRebouclage,
+                                    regulPressionEntree = desalinatorParams.regulPressionEntree,
+                                    regulPressionSaumure = desalinatorParams.regulPressionSaumure,
+                                    regulPressionFresh = desalinatorParams.regulPressionFresh
+                                };
+                                s = JsonConvert.SerializeObject(responseForceVannes);
+                            }
                             break;
 
                         case 13: // REQ_DESALINATOR_PARAMS

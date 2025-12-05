@@ -12,7 +12,7 @@ namespace Appli_CocoriCO2.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "16.8.1.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "16.10.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -195,8 +195,7 @@ namespace Appli_CocoriCO2.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("xapp-1-A02GU516K6E-2572202941058-01eb87f248250644435edd81f5b5d13c6401ae0a930b1f91" +
-            "631d4ce6718223b9")]
+        [global::System.Configuration.DefaultSettingValueAttribute("YOUR_SLACK_TOKEN_HERE")]
         public string SlackToken {
             get {
                 return ((string)(this["SlackToken"]));
@@ -407,6 +406,54 @@ namespace Appli_CocoriCO2.Properties {
             }
             set {
                 this["MesocosmTempDelta"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AlarmPressureSalinity {
+            get {
+                return ((bool)(this["AlarmPressureSalinity"]));
+            }
+            set {
+                this["AlarmPressureSalinity"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string PressureSalinity {
+            get {
+                return ((string)(this["PressureSalinity"]));
+            }
+            set {
+                this["PressureSalinity"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool AlarmSalinity {
+            get {
+                return ((bool)(this["AlarmSalinity"]));
+            }
+            set {
+                this["AlarmSalinity"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string SalinityAlarmValue {
+            get {
+                return ((string)(this["SalinityAlarmValue"]));
+            }
+            set {
+                this["SalinityAlarmValue"] = value;
             }
         }
     }

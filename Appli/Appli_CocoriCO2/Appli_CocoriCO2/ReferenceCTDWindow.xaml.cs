@@ -239,7 +239,7 @@ namespace Appli_CocoriCO2
         {
             // Forcer les vannes de salinité C1, C2, C3 à 0% (automate Salinity cID = 8)
             MW.salinityRegulParams.regulSaliniteC1.autorisationForcage = true;
-            MW.salinityRegulParams.regulSaliniteC1.consigneForcage = 100;
+            MW.salinityRegulParams.regulSaliniteC1.consigneForcage = 0;
 
             MW.salinityRegulParams.regulSaliniteC2.autorisationForcage = true;
             MW.salinityRegulParams.regulSaliniteC2.consigneForcage = 100;

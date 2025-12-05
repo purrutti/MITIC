@@ -53,58 +53,65 @@ namespace Appli_CocoriCO2
 
         public async void load(int index)
         {
-            string msg;
-            foreach (var wsd in ((MainWindow)Application.Current.MainWindow)._sockets)
+            try
             {
-                var ws = wsd;
-                if (ws.IsAvailable)
+                string msg;
+                foreach (var wsd in ((MainWindow)Application.Current.MainWindow)._sockets)
                 {
-                    if (index == 4)
+                    var ws = wsd;
+                    if (ws.IsAvailable)
                     {
+                        if (index == 4)
+                        {
 
-                        msg = "{\"cmd\":7,\"cID\":0, \"sID\":4}";
-                    }
-                    else if (index == 5)
-                    {
+                            msg = "{\"cmd\":7,\"cID\":0, \"sID\":4}";
+                        }
+                        else if (index == 5)
+                        {
 
-                        msg = "{\"cmd\":10,\"cID\":0, \"sID\":4}";
-                    }
-                    else if (index == 6)
-                    {
+                            msg = "{\"cmd\":10,\"cID\":0, \"sID\":4}";
+                        }
+                        else if (index == 6)
+                        {
 
-                        msg = "{\"cmd\":13,\"cID\":7, \"sID\":4}";
-                    }
-                    else if (index == 7)
-                    {
+                            msg = "{\"cmd\":13,\"cID\":7, \"sID\":4}";
+                        }
+                        else if (index == 7)
+                        {
 
-                        msg = "{\"cmd\":13,\"cID\":7, \"sID\":4}";
-                    }
-                    else if (index == 8) // Salinity Regulation (1)
-                    {
-                        msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
-                    }
-                    else if (index == 9) // Salinity Regulation (2)
-                    {
-                        msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
-                    }
-                    else if (index == 10) // Salinity Regulation (3)
-                    {
-                        msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
-                    }
-                    else
-                    {
-                        //{command:0,condID:0,senderID:4}
-                        msg = "{\"cmd\":0,\"cID\":" + index + ", \"sID\":4}";
-                    }
-                    try
-                    {
+                            msg = "{\"cmd\":13,\"cID\":7, \"sID\":4}";
+                        }
+                        else if (index == 8) // Salinity Regulation (1)
+                        {
+                            msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
+                        }
+                        else if (index == 9) // Salinity Regulation (2)
+                        {
+                            msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
+                        }
+                        else if (index == 10) // Salinity Regulation (3)
+                        {
+                            msg = "{\"cmd\":17,\"cID\":8, \"sID\":4}";
+                        }
+                        else
+                        {
+                            //{command:0,condID:0,senderID:4}
+                            msg = "{\"cmd\":0,\"cID\":" + index + ", \"sID\":4}";
+                        }
+                        try
+                        {
 
-                        await ws.Send(msg);
-                    }
-                    catch (Exception e) { }
+                            await ws.Send(msg);
+                        }
+                        catch (Exception e) { }
 
+                    }
                 }
+            }catch(Exception e)
+            {
+
             }
+            
 
         }
 
