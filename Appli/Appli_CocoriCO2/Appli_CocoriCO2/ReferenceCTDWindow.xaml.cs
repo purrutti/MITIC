@@ -27,7 +27,8 @@ namespace Appli_CocoriCO2
         CultureInfo ci;
 
         // Variables pour stocker les moyennes (calculées sur plusieurs échantillons)
-        private List<double> samples_ctd = new List<double>();
+        private List<double> samples_ctd_salinity = new List<double>();
+        private List<double> samples_ctd_conductivity = new List<double>();
         private List<double> samples_control = new List<double>();
         private List<double> samples_c0 = new List<double>();
         private List<double> samples_c1 = new List<double>();
@@ -35,12 +36,21 @@ namespace Appli_CocoriCO2
         private List<double> samples_c3 = new List<double>();
         private List<double> samples_desalinator = new List<double>();
 
+        private List<double> samples_temp_control = new List<double>();
+        private List<double> samples_temp_c0 = new List<double>();
+        private List<double> samples_temp_c1 = new List<double>();
+        private List<double> samples_temp_c2 = new List<double>();
+        private List<double> samples_temp_c3 = new List<double>();
+        private List<double> samples_temp_desalinator = new List<double>();
+
         // Nombre d'échantillons pour la moyenne (configurable)
         private int maxSamples = 10;  // 10 secondes par défaut (1 échantillon par seconde)
         private int averagingTimeMinutes = 10; // Temps en minutes
 
         // Valeur de référence CTD
-        private double ctd_reference = 0;
+        private double CTD_RefSalinity = 0;
+
+        private double CTD_RefConductivity = 0;
 
         public ReferenceCTDWindow()
         {
@@ -109,17 +119,25 @@ namespace Appli_CocoriCO2
             Dispatcher.Invoke(() =>
             {
                 // Ajouter les nouveaux échantillons aux listes
-                AddSample(samples_ctd, MW.salinityData.CTD_PSU);
-                AddSample(samples_control, MW.salinityData.saliniteControl/ MW.salinityFactors.factorControl);
-                AddSample(samples_c0, MW.salinityData.saliniteC0/ MW.salinityFactors.factorC0);
-                AddSample(samples_c1, MW.salinityData.saliniteC1/ MW.salinityFactors.factorC1);
-                AddSample(samples_c2, MW.salinityData.saliniteC2/ MW.salinityFactors.factorC2);
-                AddSample(samples_c3, MW.salinityData.saliniteC3/ MW.salinityFactors.factorC3);
-                AddSample(samples_desalinator, MW.desalinatorData.salinity/ MW.salinityFactors.factorDesalinator);
+                AddSample(samples_ctd_salinity, MW.salinityData.CTD_PSU);
+                AddSample(samples_ctd_conductivity, MW.salinityData.CTD_Conductivity);
+                AddSample(samples_control, MW.salinityData.conductiviteControl / MW.salinityFactors.factorControl);
+                AddSample(samples_c0, MW.salinityData.conductiviteC0 / MW.salinityFactors.factorC0);
+                AddSample(samples_c1, MW.salinityData.conductiviteC1 / MW.salinityFactors.factorC1);
+                AddSample(samples_c2, MW.salinityData.conductiviteC2 / MW.salinityFactors.factorC2);
+                AddSample(samples_c3, MW.salinityData.conductiviteC3 / MW.salinityFactors.factorC3);
+                AddSample(samples_desalinator, MW.desalinatorData.conductivity / MW.salinityFactors.factorDesalinator);
+
+                AddSample(samples_temp_control, MW.salinityData.temperatureControl);
+                AddSample(samples_temp_c0, MW.salinityData.temperatureC0);
+                AddSample(samples_temp_c1, MW.salinityData.temperatureC1);
+                AddSample(samples_temp_c2, MW.salinityData.temperatureC2);
+                AddSample(samples_temp_c3, MW.salinityData.temperatureC3);
+                AddSample(samples_temp_desalinator, MW.desalinatorData.temperature);
 
                 // CTD - Valeur instantanée
                 lbl_ctd_instant.Content = MW.salinityData.CTD_PSU.ToString("F2", ci);
-                lbl_ctd_moyenne.Content = CalculateAverage(samples_ctd).ToString("F2", ci);
+                lbl_ctd_moyenne.Content = (CalculateAverage(samples_ctd_conductivity)*10000).ToString("F2", ci);
                 lbl_ctd_facteur.Content = "1.0000"; // CTD est la référence
 
                 // Control - Valeur instantanée, moyenne et facteur correcteur
@@ -127,45 +145,46 @@ namespace Appli_CocoriCO2
                 double moyenne_control = CalculateAverage(samples_control);
                 lbl_control_instant.Content = instant_control.ToString("F2", ci);
                 lbl_control_moyenne.Content = moyenne_control.ToString("F2", ci);
-                lbl_control_facteur.Content = CalculateCorrectionFactor(moyenne_control).ToString("F4", ci);
+                lbl_control_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_control), moyenne_control).ToString("F4", ci);
 
                 // C0
                 double instant_c0 = MW.salinityData.saliniteC0;
                 double moyenne_c0 = CalculateAverage(samples_c0);
                 lbl_c0_instant.Content = instant_c0.ToString("F2", ci);
                 lbl_c0_moyenne.Content = moyenne_c0.ToString("F2", ci);
-                lbl_c0_facteur.Content = CalculateCorrectionFactor(moyenne_c0).ToString("F4", ci);
+                lbl_c0_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_c0), moyenne_c0).ToString("F4", ci);
 
                 // C1
                 double instant_c1 = MW.salinityData.saliniteC1;
                 double moyenne_c1 = CalculateAverage(samples_c1);
                 lbl_c1_instant.Content = instant_c1.ToString("F2", ci);
                 lbl_c1_moyenne.Content = moyenne_c1.ToString("F2", ci);
-                lbl_c1_facteur.Content = CalculateCorrectionFactor(moyenne_c1).ToString("F4", ci);
+                lbl_c1_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_c1), moyenne_c1).ToString("F4", ci);
 
                 // C2
                 double instant_c2 = MW.salinityData.saliniteC2;
                 double moyenne_c2 = CalculateAverage(samples_c2);
                 lbl_c2_instant.Content = instant_c2.ToString("F2", ci);
                 lbl_c2_moyenne.Content = moyenne_c2.ToString("F2", ci);
-                lbl_c2_facteur.Content = CalculateCorrectionFactor(moyenne_c2).ToString("F4", ci);
+                lbl_c2_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_c2), moyenne_c2).ToString("F4", ci);
 
                 // C3
                 double instant_c3 = MW.salinityData.saliniteC3;
                 double moyenne_c3 = CalculateAverage(samples_c3);
                 lbl_c3_instant.Content = instant_c3.ToString("F2", ci);
                 lbl_c3_moyenne.Content = moyenne_c3.ToString("F2", ci);
-                lbl_c3_facteur.Content = CalculateCorrectionFactor(moyenne_c3).ToString("F4", ci);
+                lbl_c3_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_c3), moyenne_c3).ToString("F4", ci);
 
                 // Desalinator
                 double instant_desalinator = MW.desalinatorData.salinity;
                 double moyenne_desalinator = CalculateAverage(samples_desalinator);
                 lbl_desalinator_instant.Content = instant_desalinator.ToString("F2", ci);
                 lbl_desalinator_moyenne.Content = moyenne_desalinator.ToString("F2", ci);
-                lbl_desalinator_facteur.Content = CalculateCorrectionFactor(moyenne_desalinator).ToString("F4", ci);
+                lbl_desalinator_facteur.Content = CalculateCorrectionFactor(CalculateAverage(samples_temp_desalinator), moyenne_desalinator).ToString("F4", ci);
 
                 // Mettre à jour la référence CTD
-                ctd_reference = CalculateAverage(samples_ctd);
+                CTD_RefSalinity = CalculateAverage(samples_ctd_salinity);
+                CTD_RefConductivity = CalculateAverage(samples_ctd_conductivity);
 
                 // Afficher les facteurs actuels depuis MainWindow
                 lbl_control_actuel.Content = MW.salinityFactors.factorControl.ToString("F4", ci);
@@ -193,11 +212,65 @@ namespace Appli_CocoriCO2
             return samples.Average();
         }
 
-        private double CalculateCorrectionFactor(double moyenne_sonde)
+        private double CalculateCorrectionFactor(double tempSonde, double moyenneConductivity)
         {
-            if (moyenne_sonde == 0 || ctd_reference == 0)
+            if (tempSonde == 0 || CTD_RefSalinity == 0)
                 return 0;
-            return ctd_reference / moyenne_sonde;
+            return CalculateExpectedConductivity(tempSonde) / moyenneConductivity;
+        }
+
+        private double CalculateExpectedConductivity(double temp)
+        {
+            if (double.IsNaN(temp) || double.IsNaN(CTD_RefSalinity))
+                return double.NaN;
+
+            double[] a = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
+            double[] b = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
+            double[] c = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
+            double k = 0.0162;
+            double C_ref = 42914.0;
+
+            double r_t = c[0] + c[1] * temp + c[2] * Math.Pow(temp, 2) +
+                         c[3] * Math.Pow(temp, 3) + c[4] * Math.Pow(temp, 4);
+
+            double delta = (temp - 15.0) / (1.0 + k * (temp - 15.0));
+
+            // Combined coefficients: S = sum( d[i] * x^i, i=0..5 )  where x = sqrt(R_t)
+            double[] d = new double[6];
+            for (int i = 0; i < 6; i++)
+                d[i] = a[i] + delta * b[i];
+
+            // Newton-Raphson to solve  sum(d[i]*x^i) - salinity = 0
+            double x = Math.Sqrt(CTD_RefSalinity / 35.0);  // initial guess
+
+            for (int iter = 0; iter < 50; iter++)
+            {
+                double f = -CTD_RefSalinity;
+                double fp = 0.0;
+                double xi = 1.0;  // x^i, starting at x^0
+
+                for (int i = 0; i < 6; i++)
+                {
+                    f += d[i] * xi;
+                    if (i > 0)
+                        fp += i * d[i] * xi / x;
+                    xi *= x;
+                }
+
+                if (Math.Abs(fp) < 1e-30)
+                    break;
+
+                double dx = f / fp;
+                x -= dx;
+
+                if (Math.Abs(dx) < 1e-12)
+                    break;
+            }
+
+            double R_t = x * x;
+            double expectedConductivity = R_t * r_t * C_ref;
+
+            return expectedConductivity;
         }
 
         private async void btn_Demarrer_Click(object sender, RoutedEventArgs e)
@@ -381,18 +454,27 @@ namespace Appli_CocoriCO2
 
         private void btn_ValiderReference_Click(object sender, RoutedEventArgs e)
         {
+
+
+            double factorControl = CalculateCorrectionFactor(CalculateAverage(samples_temp_control), CalculateAverage(samples_control));
+            double factorC0 = CalculateCorrectionFactor(CalculateAverage(samples_temp_c0), CalculateAverage(samples_c0));
+            double factorC1 = CalculateCorrectionFactor(CalculateAverage(samples_temp_c1), CalculateAverage(samples_c1));
+            double factorC2 = CalculateCorrectionFactor(CalculateAverage(samples_temp_c2), CalculateAverage(samples_c2));
+            double factorC3 = CalculateCorrectionFactor(CalculateAverage(samples_temp_c3), CalculateAverage(samples_c3));
+            double factorDesalinator = CalculateCorrectionFactor(CalculateAverage(samples_temp_desalinator), CalculateAverage(samples_desalinator));
+
             // TODO: Implement reference validation logic
             // This will save the current CTD values as reference
             MessageBoxResult result = MessageBox.Show(
                 $"Valider la référence CTD actuelle ?\n\n" +
-                $"CTD Salinité moyenne: {ctd_reference:F2} PSU\n\n" +
+                $"CTD Salinité moyenne: {CTD_RefConductivity:F2}\n\n" +
                 $"Les facteurs correctifs calculés seront appliqués à toutes les sondes:\n" +
-                $"  Control: {CalculateCorrectionFactor(CalculateAverage(samples_control)):F4}\n" +
-                $"  C0: {CalculateCorrectionFactor(CalculateAverage(samples_c0)):F4}\n" +
-                $"  C1: {CalculateCorrectionFactor(CalculateAverage(samples_c1)):F4}\n" +
-                $"  C2: {CalculateCorrectionFactor(CalculateAverage(samples_c2)):F4}\n" +
-                $"  C3: {CalculateCorrectionFactor(CalculateAverage(samples_c3)):F4}\n" +
-                $"  Desalinator: {CalculateCorrectionFactor(CalculateAverage(samples_desalinator)):F4}",
+                $"  Control: {factorControl:F4}\n" +
+                $"  C0: {factorC0:F4}\n" +
+                $"  C1: {factorC1:F4}\n" +
+                $"  C2: {factorC2:F4}\n" +
+                $"  C3: {factorC3:F4}\n" +
+                $"  Desalinator: {factorDesalinator:F4}",
                 "Validation référence CTD",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
@@ -400,12 +482,6 @@ namespace Appli_CocoriCO2
             if (result == MessageBoxResult.Yes)
             {
                 // Calculer les facteurs correctifs
-                double factorControl = CalculateCorrectionFactor(CalculateAverage(samples_control));
-                double factorC0 = CalculateCorrectionFactor(CalculateAverage(samples_c0));
-                double factorC1 = CalculateCorrectionFactor(CalculateAverage(samples_c1));
-                double factorC2 = CalculateCorrectionFactor(CalculateAverage(samples_c2));
-                double factorC3 = CalculateCorrectionFactor(CalculateAverage(samples_c3));
-                double factorDesalinator = CalculateCorrectionFactor(CalculateAverage(samples_desalinator));
 
                 // Enregistrer dans MainWindow
                 MW.salinityFactors.factorControl = factorControl;
@@ -686,5 +762,23 @@ namespace Appli_CocoriCO2
             this.Hide();
             e.Cancel = true;
         }
+
+        private void Button_Click(object sender, RoutedEventArgs e)
+        {
+            samples_ctd_salinity.Clear();
+            samples_ctd_conductivity.Clear();
+            samples_control.Clear();
+            samples_c0.Clear();
+            samples_c1.Clear();
+            samples_c2.Clear();
+            samples_c3.Clear();
+            samples_desalinator.Clear();
+            samples_temp_control.Clear();
+            samples_temp_c0.Clear();
+            samples_temp_c1.Clear();
+            samples_temp_c2.Clear();
+            samples_temp_c3.Clear();
+            samples_temp_desalinator.Clear();
+    }
     }
 }

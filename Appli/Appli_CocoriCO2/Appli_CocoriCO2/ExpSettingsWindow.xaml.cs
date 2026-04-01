@@ -396,7 +396,9 @@ namespace Appli_CocoriCO2
                         {
 
                             if (Double.TryParse(tb_dpH_setPoint.Text, out dTemp)) c.rpH.offset = dTemp;
-                            c.rpH.consigne = MW.ambiantConditions.pH + c.rpH.offset;
+                            //c.rpH.consigne = MW.ambiantConditions.pH + c.rpH.offset;
+                            double moyennepHC0 = (MW.conditions[0].Meso[0].pH + MW.conditions[0].Meso[1].pH + MW.conditions[0].Meso[2].pH) / 3;
+                            c.rpH.consigne = moyennepHC0 + c.rpH.offset;
                         }
                         else
                         {

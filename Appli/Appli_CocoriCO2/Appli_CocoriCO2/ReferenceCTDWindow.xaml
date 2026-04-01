@@ -56,9 +56,9 @@
                     <!-- Headers -->
                     <Label Content="Sonde" Grid.Row="0" Grid.Column="0" FontWeight="Bold"
                            VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    <Label Content="Valeur instantanée" Grid.Row="0" Grid.Column="1" FontWeight="Bold"
+                    <Label Content="Salinité" Grid.Row="0" Grid.Column="1" FontWeight="Bold"
                            VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    <Label Content="Valeur moyenne" Grid.Row="0" Grid.Column="2" FontWeight="Bold"
+                    <Label Content="Conductivité moyenne" Grid.Row="0" Grid.Column="2" FontWeight="Bold"
                            VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     <Label Content="Coeff calculé" Grid.Row="0" Grid.Column="3" FontWeight="Bold"
                            VerticalAlignment="Center" HorizontalAlignment="Center"/>
@@ -163,5 +163,6 @@
             <Button x:Name="btn_reset_factors" Content="Réinitialiser facteurs" Width="170" Height="35"
                     Margin="10" Click="btn_ResetFactors_Click" FontSize="14" Background="#FFFFCC"/>
         </StackPanel>
+        <Button Content="RAZ moyennes" HorizontalAlignment="Left" Margin="900,6,0,0" Grid.Row="3" VerticalAlignment="Top" Width="120" Height="30" Click="Button_Click"/>
     </Grid>
 </Window>

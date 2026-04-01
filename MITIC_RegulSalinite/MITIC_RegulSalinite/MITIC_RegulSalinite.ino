@@ -172,7 +172,7 @@ float readFlow(uint8_t pin) {
     return debit;
 }
 
-double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
+/*double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
     double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
     double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
     double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
@@ -192,6 +192,29 @@ double calculateSalinity(double temperature, double conductivity, double correct
 
     // Appliquer le facteur correctif
     return rawSalinity * correctionFactor;
+}*/
+
+double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
+    double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
+    double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
+    double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
+    double k = 0.0162;
+    double C_ref = 42914.0;
+    //double correctedConductivity = correctionFactor * conductivity;
+    //double R = correctedConductivity / C_ref;
+    double R = conductivity / C_ref;
+    double r_t = c[0] + c[1] * temperature + c[2] * pow(temperature, 2) +
+        c[3] * pow(temperature, 3) + c[4] * pow(temperature, 4);
+    double R_t = R / r_t;
+    double Salinity = (
+        a[0] + a[1] * pow(R_t, 0.5) + a[2] * R_t + a[3] * pow(R_t, 1.5) +
+        a[4] * pow(R_t, 2) + a[5] * pow(R_t, 2.5) +
+        ((temperature - 15.0) / (1.0 + k * (temperature - 15.0))) *
+        (b[0] + b[1] * pow(R_t, 0.5) + b[2] * R_t + b[3] * pow(R_t, 1.5) +
+            b[4] * pow(R_t, 2) + b[5] * pow(R_t, 2.5))
+        );
+
+    return Salinity;
 }
 
 int HamiltonCalibStep = 0;
@@ -269,27 +292,28 @@ void readMBSensors() {
                 // Stocker conductivité et calculer salinité selon le capteur avec facteur correctif
                 switch (currentSensor) {
                 case 0:
-                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue;
+                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue*factorControl;
+
                     salinityData.saliniteControl = calculateSalinity(salinityData.temperatureControl, salinityData.conductiviteControl, factorControl);
 
                     break;
                 case 1:
-                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue;
+                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue*factorC3;
                     salinityData.saliniteC3 = calculateSalinity(salinityData.temperatureC3, salinityData.conductiviteC3, factorC3);
                     break;
                 case 2:
-                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue;
+                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue*factorC2;
                     salinityData.saliniteC2 = calculateSalinity(salinityData.temperatureC2, salinityData.conductiviteC2, factorC2);
                     regulC2.mesure = salinityData.saliniteC2;
                     regulC2_filtre.mesure = salinityData.saliniteC2;
                     break;
                 case 3:
-                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue;
+                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue*factorC1;
                     salinityData.saliniteC1 = calculateSalinity(salinityData.temperatureC1, salinityData.conductiviteC1, factorC1);
                     regulC1.mesure = salinityData.saliniteC1;
                     break;
                 case 4:
-                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue;
+                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue*factorC0;
                     salinityData.saliniteC0 = calculateSalinity(salinityData.temperatureC0, salinityData.conductiviteC0, factorC0);
                     break;
                 }
@@ -569,51 +593,49 @@ void initRegul() {
 void sendData() {
     if (elapsed(&tempoSendData)) {
         StaticJsonDocument<600> doc;
-
         doc["cmd"] = SEND_SALINITY_DATA;
         doc["cID"] = PLCID;
         doc["sID"] = PLCID;
         doc["time"] = RTC.getTime();
 
-        doc["conductiviteC0"] = salinityData.conductiviteC0;
-        doc["conductiviteC1"] = salinityData.conductiviteC1;
-        doc["conductiviteC2"] = salinityData.conductiviteC2;
-        doc["conductiviteC3"] = salinityData.conductiviteC3;
-        doc["conductiviteControl"] = salinityData.conductiviteControl;
+        doc["conductiviteC0"] = round(salinityData.conductiviteC0 * 100) / 100.0;
+        doc["conductiviteC1"] = round(salinityData.conductiviteC1 * 100) / 100.0;
+        doc["conductiviteC2"] = round(salinityData.conductiviteC2 * 100) / 100.0;
+        doc["conductiviteC3"] = round(salinityData.conductiviteC3 * 100) / 100.0;
+        doc["conductiviteControl"] = round(salinityData.conductiviteControl * 100) / 100.0;
 
-        doc["saliniteC0"] = salinityData.saliniteC0;
-        doc["saliniteC1"] = salinityData.saliniteC1;
-        doc["saliniteC2"] = salinityData.saliniteC2;
-        doc["saliniteC3"] = salinityData.saliniteC3;
-        doc["saliniteControl"] = salinityData.saliniteControl;
+        doc["saliniteC0"] = round(salinityData.saliniteC0 * 100) / 100.0;
+        doc["saliniteC1"] = round(salinityData.saliniteC1 * 100) / 100.0;
+        doc["saliniteC2"] = round(salinityData.saliniteC2 * 100) / 100.0;
+        doc["saliniteC3"] = round(salinityData.saliniteC3 * 100) / 100.0;
+        doc["saliniteControl"] = round(salinityData.saliniteControl * 100) / 100.0;
 
-        doc["temperatureC0"] = salinityData.temperatureC0;
-        doc["temperatureC1"] = salinityData.temperatureC1;
-        doc["temperatureC2"] = salinityData.temperatureC2;
-        doc["temperatureC3"] = salinityData.temperatureC3;
-        doc["temperatureControl"] = salinityData.temperatureControl;
+        doc["temperatureC0"] = round(salinityData.temperatureC0 * 100) / 100.0;
+        doc["temperatureC1"] = round(salinityData.temperatureC1 * 100) / 100.0;
+        doc["temperatureC2"] = round(salinityData.temperatureC2 * 100) / 100.0;
+        doc["temperatureC3"] = round(salinityData.temperatureC3 * 100) / 100.0;
+        doc["temperatureControl"] = round(salinityData.temperatureControl * 100) / 100.0;
 
-        doc["debitC0"] = salinityData.debitC0;
-        doc["debitC1"] = salinityData.debitC1;
-        doc["debitC2"] = salinityData.debitC2;
-        doc["debitC3"] = salinityData.debitC3;
+        doc["debitC0"] = round(salinityData.debitC0 * 100) / 100.0;
+        doc["debitC1"] = round(salinityData.debitC1 * 100) / 100.0;
+        doc["debitC2"] = round(salinityData.debitC2 * 100) / 100.0;
+        doc["debitC3"] = round(salinityData.debitC3 * 100) / 100.0;
 
-        doc["vanneC0"] = salinityData.vanneC0;
-        doc["vanneC1"] = salinityData.vanneC1;
-        doc["vanneC2"] = salinityData.vanneC2;
-        doc["vanneC3"] = salinityData.vanneC3;
-        doc["vanneC2_filtre"] = salinityData.vanneC2_filtre;
+        doc["vanneC0"] = round(salinityData.vanneC0 * 100) / 100.0;
+        doc["vanneC1"] = round(salinityData.vanneC1 * 100) / 100.0;
+        doc["vanneC2"] = round(salinityData.vanneC2 * 100) / 100.0;
+        doc["vanneC3"] = round(salinityData.vanneC3 * 100) / 100.0;
+        doc["vanneC2_filtre"] = round(salinityData.vanneC2_filtre * 100) / 100.0;
 
         // CTD Data
-        doc["CTD_Temperature"] = ctdData.Temperature;
-        doc["CTD_Conductivity"] = ctdData.Conductivity;
-        doc["CTD_Oxygen"] = ctdData.Oxygen;
-        doc["CTD_PSU"] = ctdData.PSU;
-        doc["CTD_CalculatedPSU"] = ctdData.CalculatedPSU;
+        doc["CTD_Temperature"] = round(ctdData.Temperature * 100) / 100.0;
+        doc["CTD_Conductivity"] = round(ctdData.Conductivity * 100) / 100.0;
+        doc["CTD_Oxygen"] = round(ctdData.Oxygen * 100) / 100.0;
+        doc["CTD_PSU"] = round(ctdData.PSU * 100) / 100.0;
+        doc["CTD_CalculatedPSU"] = round(ctdData.CalculatedPSU * 100) / 100.0;
 
         serializeJson(doc, buffer, sizeof(buffer));
         webSocket.sendTXT(buffer);
-
         Serial.println("Data sent:");
         Serial.println(buffer);
     }
@@ -621,56 +643,55 @@ void sendData() {
 
 void sendParams() {
     StaticJsonDocument<600> doc;
-
     doc["cmd"] = SEND_SALINITY_PARAMS;
     doc["cID"] = PLCID;
     doc["sID"] = PLCID;
     doc["time"] = RTC.getTime();
 
     JsonObject regulC0Obj = doc.createNestedObject("regulC0");
-    regulC0Obj["cons"] = regulC0.consigne;
+    regulC0Obj["cons"] = round(regulC0.consigne * 100) / 100.0;
     regulC0Obj["Kp"] = regulC0.Kp;
     regulC0Obj["Ki"] = regulC0.Ki;
     regulC0Obj["Kd"] = regulC0.Kd;
     regulC0Obj["aForcage"] = regulC0.autorisationForcage ? "true" : "false";
-    regulC0Obj["consForcage"] = regulC0.consigneForcage;
-    regulC0Obj["offset"] = regulC0.offset;
+    regulC0Obj["consForcage"] = round(regulC0.consigneForcage * 100) / 100.0;
+    regulC0Obj["offset"] = round(regulC0.offset * 100) / 100.0;
 
     JsonObject regulC1Obj = doc.createNestedObject("regulC1");
-    regulC1Obj["cons"] = regulC1.consigne;
+    regulC1Obj["cons"] = round(regulC1.consigne * 100) / 100.0;
     regulC1Obj["Kp"] = regulC1.Kp;
     regulC1Obj["Ki"] = regulC1.Ki;
     regulC1Obj["Kd"] = regulC1.Kd;
     regulC1Obj["aForcage"] = regulC1.autorisationForcage ? "true" : "false";
-    regulC1Obj["consForcage"] = regulC1.consigneForcage;
-    regulC1Obj["offset"] = regulC1.offset;
+    regulC1Obj["consForcage"] = round(regulC1.consigneForcage * 100) / 100.0;
+    regulC1Obj["offset"] = round(regulC1.offset * 100) / 100.0;
 
     JsonObject regulC2Obj = doc.createNestedObject("regulC2");
-    regulC2Obj["cons"] = regulC2.consigne;
+    regulC2Obj["cons"] = round(regulC2.consigne * 100) / 100.0;
     regulC2Obj["Kp"] = regulC2.Kp;
     regulC2Obj["Ki"] = regulC2.Ki;
     regulC2Obj["Kd"] = regulC2.Kd;
     regulC2Obj["aForcage"] = regulC2.autorisationForcage ? "true" : "false";
-    regulC2Obj["consForcage"] = regulC2.consigneForcage;
-    regulC2Obj["offset"] = regulC2.offset;
+    regulC2Obj["consForcage"] = round(regulC2.consigneForcage * 100) / 100.0;
+    regulC2Obj["offset"] = round(regulC2.offset * 100) / 100.0;
 
     JsonObject regulC3Obj = doc.createNestedObject("regulC3");
-    regulC3Obj["cons"] = regulC3.consigne;
+    regulC3Obj["cons"] = round(regulC3.consigne * 100) / 100.0;
     regulC3Obj["Kp"] = regulC3.Kp;
     regulC3Obj["Ki"] = regulC3.Ki;
     regulC3Obj["Kd"] = regulC3.Kd;
     regulC3Obj["aForcage"] = regulC3.autorisationForcage ? "true" : "false";
-    regulC3Obj["consForcage"] = regulC3.consigneForcage;
-    regulC3Obj["offset"] = regulC3.offset;
+    regulC3Obj["consForcage"] = round(regulC3.consigneForcage * 100) / 100.0;
+    regulC3Obj["offset"] = round(regulC3.offset * 100) / 100.0;
 
     JsonObject regulC2FObj = doc.createNestedObject("regulC2_filtre");
-    regulC2FObj["cons"] = regulC2_filtre.consigne;
+    regulC2FObj["cons"] = round(regulC2_filtre.consigne * 100) / 100.0;
     regulC2FObj["Kp"] = regulC2_filtre.Kp;
     regulC2FObj["Ki"] = regulC2_filtre.Ki;
     regulC2FObj["Kd"] = regulC2_filtre.Kd;
     regulC2FObj["aForcage"] = regulC2_filtre.autorisationForcage ? "true" : "false";
-    regulC2FObj["consForcage"] = regulC2_filtre.consigneForcage;
-    regulC2FObj["offset"] = regulC2_filtre.offset;
+    regulC2FObj["consForcage"] = round(regulC2_filtre.consigneForcage * 100) / 100.0;
+    regulC2FObj["offset"] = round(regulC2_filtre.offset * 100) / 100.0;
 
     serializeJson(doc, buffer, sizeof(buffer));
     Serial.println(buffer);

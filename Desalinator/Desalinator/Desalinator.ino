@@ -54,6 +54,11 @@ unsigned long debitMOIBelowThresholdStart = 0;
 bool debitMOIBelowThresholdActive = false;
 
 
+// Facteurs correctifs de salinité
+double factorDesalinator = 1.0;
+int factorAddress = 230;
+
+
 /******** INIT *******/
 
 Regul regulPressionEntree, regulPressionSaumure, regulPressionFresh, regulRebouclage;
@@ -300,12 +305,22 @@ void initRegul() {
         Serial.println("Debit MOI threshold set to default value: 11.0 L/min");
     }
 
+    // Load Salinity Correction Factors from EEPROM
+    double savedFactor = EEPROM.readDouble(factorAddress);
+    
+
+    if (!isnan(savedFactor) && savedFactor > 0.5 && savedFactor < 2.0) {
+        factorDesalinator = savedFactor;
+        Serial.print("Control correction factor loaded: ");
+        Serial.println(factorDesalinator, 4);
+    }
+
 
 
     regulPressionFresh.setPID(regulPressionFresh.Kp, regulPressionFresh.Ki, regulPressionFresh.Kd, 0, 255, REVERSE);
-    regulPressionEntree.setPID(regulPressionEntree.Kp, regulPressionEntree.Ki, regulPressionEntree.Kd, 125, 255, DIRECT);
+    regulPressionEntree.setPID(regulPressionEntree.Kp, regulPressionEntree.Ki, regulPressionEntree.Kd, 90, 255, DIRECT);
     regulPressionSaumure.setPID(regulPressionSaumure.Kp, regulPressionSaumure.Ki, regulPressionSaumure.Kd, 0, 255, REVERSE);
-    regulRebouclage.setPID(regulRebouclage.Kp, regulRebouclage.Ki, regulRebouclage.Kd, 0, 127, DIRECT);
+    regulRebouclage.setPID(regulRebouclage.Kp, regulRebouclage.Ki, regulRebouclage.Kd, 0, 160, DIRECT);
 }
 
 static unsigned long lastTest = 0;
@@ -330,7 +345,9 @@ void loop() {
         Serial.println(regulRebouclage.consigne);
         Serial.print(F("PWM regulPressionFresh.consigne: "));
         Serial.println(regulPressionFresh.consigne);
-
+        Serial.print(F("Regul fresh coef: "));
+        Serial.println(regulPressionFresh.Kp);
+        Serial.println(regulPressionFresh.Ki);
 
         Serial.print(F("PWM regulPressionEntree.sortiePID: "));
         Serial.println(regulPressionEntree.sortiePID);
@@ -438,7 +455,6 @@ void checkPressionHP() {
 }
 
 
-
 void sendData() {
     if (elapsed(&tempoSendData)) {
         StaticJsonDocument<512> doc;
@@ -448,29 +464,27 @@ void sendData() {
         doc["sID"] = PLCID;
         doc["time"] = RTC.getTime();
 
-        doc["pressionHP"] = desalinatorData.pressionHP;
-        doc["pressionEntree"] = desalinatorData.pressionEntree;
-        doc["pressionSaumure"] = desalinatorData.pressionSaumure;
-        doc["pressionFresh"] = desalinatorData.pressionFresh;
+        doc["pressionHP"] = round(desalinatorData.pressionHP * 100) / 100.0;
+        doc["pressionEntree"] = round(desalinatorData.pressionEntree * 100) / 100.0;
+        doc["pressionSaumure"] = round(desalinatorData.pressionSaumure * 100) / 100.0;
+        doc["pressionFresh"] = round(desalinatorData.pressionFresh * 100) / 100.0;
 
-        doc["debitEntree"] = desalinatorData.debitEntree;
-        doc["debitMOI"] = desalinatorData.debitMOI;
-        doc["debitSaumure"] = desalinatorData.debitSaumure;
-        doc["debitFresh"] = desalinatorData.debitFresh;
+        doc["debitEntree"] = round(desalinatorData.debitEntree * 100) / 100.0;
+        doc["debitMOI"] = round(desalinatorData.debitMOI * 100) / 100.0;
+        doc["debitSaumure"] = round(desalinatorData.debitSaumure * 100) / 100.0;
+        doc["debitFresh"] = round(desalinatorData.debitFresh * 100) / 100.0;
 
-        doc["vanneEntree"] = desalinatorData.vanneEntree;
-        doc["vanneSaumure"] = desalinatorData.vanneSaumure;
-        doc["vanneFresh"] = desalinatorData.vanneFresh;
-        doc["v3VMOI"] = desalinatorData.v3VMOI;
+        doc["vanneEntree"] = round(desalinatorData.vanneEntree * 100) / 100.0;
+        doc["vanneSaumure"] = round(desalinatorData.vanneSaumure * 100) / 100.0;
+        doc["vanneFresh"] = round(desalinatorData.vanneFresh * 100) / 100.0;
+        doc["v3VMOI"] = round(desalinatorData.v3VMOI * 100) / 100.0;
 
-        doc["pompeHP"] = desalinatorData.pompeHP;
-        doc["HP_threshold"] = desalinatorData.HP_threshold;
+        doc["pompeHP"] = round(desalinatorData.pompeHP * 100) / 100.0;
+        doc["HP_threshold"] = round(desalinatorData.HP_threshold * 100) / 100.0;
 
-        doc["conductivity"] = desalinatorData.conductivity;
-        doc["salinity"] = desalinatorData.salinity;
-        doc["temperature"] = desalinatorData.temperature;
-
-
+        doc["conductivity"] = round(desalinatorData.conductivity * 100) / 100.0;
+        doc["salinity"] = round(desalinatorData.salinity * 100) / 100.0;
+        doc["temperature"] = round(desalinatorData.temperature * 100) / 100.0;
 
         serializeJson(doc, buffer, sizeof(buffer));
         webSocket.sendTXT(buffer);
@@ -479,54 +493,52 @@ void sendData() {
         Serial.println(buffer);
     }
 }
-
 void sendParams() {
     StaticJsonDocument<512> doc;
-
     doc["cmd"] = (int)SEND_DESALINATOR_PARAMS;
     doc["cID"] = PLCID;
     doc["sID"] = PLCID;
     doc["time"] = RTC.getTime();
+    doc["HP_threshold"] = round(desalinatorData.HP_threshold * 100) / 100.0;
+    doc["pompeHP"] = round(desalinatorData.pompeHP * 100) / 100.0;
+    doc["pressionEntreeThreshold"] = round(desalinatorData.pressionEntreeThreshold * 100) / 100.0;
+    doc["debitMOIThreshold"] = round(desalinatorData.debitMOIThreshold * 100) / 100.0;
 
-    doc["HP_threshold"] = desalinatorData.HP_threshold;
-    doc["pompeHP"] = desalinatorData.pompeHP;
-    doc["pressionEntreeThreshold"] = desalinatorData.pressionEntreeThreshold;
-    doc["debitMOIThreshold"] = desalinatorData.debitMOIThreshold;
     JsonObject regulRebouclageObj = doc.createNestedObject("regulRebouclage");
-    regulRebouclageObj["cons"] = regulRebouclage.consigne;
+    regulRebouclageObj["cons"] = round(regulRebouclage.consigne * 100) / 100.0;
     regulRebouclageObj["Kp"] = regulRebouclage.Kp;
     regulRebouclageObj["Ki"] = regulRebouclage.Ki;
     regulRebouclageObj["Kd"] = regulRebouclage.Kd;
     regulRebouclageObj["aForcage"] = regulRebouclage.autorisationForcage ? "true" : "false";
-    regulRebouclageObj["consForcage"] = regulRebouclage.consigneForcage;
-    regulRebouclageObj["offset"] = regulRebouclage.offset;
+    regulRebouclageObj["consForcage"] = round(regulRebouclage.consigneForcage * 100) / 100.0;
+    regulRebouclageObj["offset"] = round(regulRebouclage.offset * 100) / 100.0;
 
     JsonObject regulPressionEntreeObj = doc.createNestedObject("regulPressionEntree");
-    regulPressionEntreeObj["cons"] = regulPressionEntree.consigne;
+    regulPressionEntreeObj["cons"] = round(regulPressionEntree.consigne * 100) / 100.0;
     regulPressionEntreeObj["Kp"] = regulPressionEntree.Kp;
     regulPressionEntreeObj["Ki"] = regulPressionEntree.Ki;
     regulPressionEntreeObj["Kd"] = regulPressionEntree.Kd;
     regulPressionEntreeObj["aForcage"] = regulPressionEntree.autorisationForcage ? "true" : "false";
-    regulPressionEntreeObj["consForcage"] = regulPressionEntree.consigneForcage;
-    regulPressionEntreeObj["offset"] = regulPressionEntree.offset;
+    regulPressionEntreeObj["consForcage"] = round(regulPressionEntree.consigneForcage * 100) / 100.0;
+    regulPressionEntreeObj["offset"] = round(regulPressionEntree.offset * 100) / 100.0;
 
     JsonObject regulPressionSaumureObj = doc.createNestedObject("regulPressionSaumure");
-    regulPressionSaumureObj["cons"] = regulPressionSaumure.consigne;
+    regulPressionSaumureObj["cons"] = round(regulPressionSaumure.consigne * 100) / 100.0;
     regulPressionSaumureObj["Kp"] = regulPressionSaumure.Kp;
     regulPressionSaumureObj["Ki"] = regulPressionSaumure.Ki;
     regulPressionSaumureObj["Kd"] = regulPressionSaumure.Kd;
     regulPressionSaumureObj["aForcage"] = regulPressionSaumure.autorisationForcage ? "true" : "false";
-    regulPressionSaumureObj["consForcage"] = regulPressionSaumure.consigneForcage;
-    regulPressionSaumureObj["offset"] = regulPressionSaumure.offset;
+    regulPressionSaumureObj["consForcage"] = round(regulPressionSaumure.consigneForcage * 100) / 100.0;
+    regulPressionSaumureObj["offset"] = round(regulPressionSaumure.offset * 100) / 100.0;
 
     JsonObject regulPressionFreshObj = doc.createNestedObject("regulPressionFresh");
-    regulPressionFreshObj["cons"] = regulPressionFresh.consigne;
+    regulPressionFreshObj["cons"] = round(regulPressionFresh.consigne * 100) / 100.0;
     regulPressionFreshObj["Kp"] = regulPressionFresh.Kp;
     regulPressionFreshObj["Ki"] = regulPressionFresh.Ki;
     regulPressionFreshObj["Kd"] = regulPressionFresh.Kd;
     regulPressionFreshObj["aForcage"] = regulPressionFresh.autorisationForcage ? "true" : "false";
-    regulPressionFreshObj["consForcage"] = regulPressionFresh.consigneForcage;
-    regulPressionFreshObj["offset"] = regulPressionFresh.offset;
+    regulPressionFreshObj["consForcage"] = round(regulPressionFresh.consigneForcage * 100) / 100.0;
+    regulPressionFreshObj["offset"] = round(regulPressionFresh.offset * 100) / 100.0;
 
     serializeJson(doc, buffer, sizeof(buffer));
     Serial.println(buffer);
@@ -614,6 +626,13 @@ void receiveParams(StaticJsonDocument<512>& doc) {
     address = regulRebouclage.save(address);
     address = regulPressionFresh.save(address);
     Serial.println("Parameters updated");
+
+
+    regulPressionFresh.setPID(regulPressionFresh.Kp, regulPressionFresh.Ki, regulPressionFresh.Kd, 0, 255, REVERSE);
+    regulPressionEntree.setPID(regulPressionEntree.Kp, regulPressionEntree.Ki, regulPressionEntree.Kd, 90, 255, DIRECT);
+    regulPressionSaumure.setPID(regulPressionSaumure.Kp, regulPressionSaumure.Ki, regulPressionSaumure.Kd, 0, 255, REVERSE);
+    regulRebouclage.setPID(regulRebouclage.Kp, regulRebouclage.Ki, regulRebouclage.Kd, 0, 190, DIRECT);
+
 }
 
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -638,6 +657,51 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         break;
     }
 }
+
+/*double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
+    double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
+    double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
+    double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
+    double k = 0.0162;
+    double C_ref = 42914.0;
+    double R = conductivity / C_ref;
+    double r_t = c[0] + c[1] * temperature + c[2] * pow(temperature, 2) +
+        c[3] * pow(temperature, 3) + c[4] * pow(temperature, 4);
+    double R_t = R / r_t;
+    desalinatorData.salinity = (
+        a[0] + a[1] * pow(R_t, 0.5) + a[2] * R_t + a[3] * pow(R_t, 1.5) +
+        a[4] * pow(R_t, 2) + a[5] * pow(R_t, 2.5) +
+        ((temperature - 15.0) / (1.0 + k * (temperature - 15.0))) *
+        (b[0] + b[1] * pow(R_t, 0.5) + b[2] * R_t + b[3] * pow(R_t, 1.5) +
+            b[4] * pow(R_t, 2) + b[5] * pow(R_t, 2.5))
+        ) * correctionFactor;
+    regulRebouclage.mesure = desalinatorData.salinity;
+    return desalinatorData.salinity;
+}*/
+
+double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
+    double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
+    double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
+    double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
+    double k = 0.0162;
+    double C_ref = 42914.0;
+    double correctedConductivity = correctionFactor * conductivity;
+    double R = correctedConductivity / C_ref;
+    double r_t = c[0] + c[1] * temperature + c[2] * pow(temperature, 2) +
+        c[3] * pow(temperature, 3) + c[4] * pow(temperature, 4);
+    double R_t = R / r_t;
+    desalinatorData.salinity = (
+        a[0] + a[1] * pow(R_t, 0.5) + a[2] * R_t + a[3] * pow(R_t, 1.5) +
+        a[4] * pow(R_t, 2) + a[5] * pow(R_t, 2.5) +
+        ((temperature - 15.0) / (1.0 + k * (temperature - 15.0))) *
+        (b[0] + b[1] * pow(R_t, 0.5) + b[2] * R_t + b[3] * pow(R_t, 1.5) +
+            b[4] * pow(R_t, 2) + b[5] * pow(R_t, 2.5))
+        );
+    desalinatorData.conductivity = correctedConductivity;
+    regulRebouclage.mesure = desalinatorData.salinity;
+    return desalinatorData.salinity;
+}
+
 void readMBSensors() {
     mbSensor.query.u8id = 1;
     if (salinite) {
@@ -653,8 +717,8 @@ void readMBSensors() {
             Serial.print("Sensor "); Serial.print(1); Serial.print(": Temperature: ");
             Serial.println(mbSensor.temp_sensorValue);
             desalinatorData.temperature = mbSensor.temp_sensorValue;
-            calculateSalinity(desalinatorData.temperature, desalinatorData.conductivity);
-
+            calculateSalinity(desalinatorData.temperature, desalinatorData.conductivity, factorDesalinator);
+            Serial.print("Correction factor salinity:"); Serial.println(factorDesalinator);
             salinite = true;
 
             readSensors = false;
@@ -662,7 +726,7 @@ void readMBSensors() {
     }
 }
 
-
+/*
 double calculateSalinity(double temperature, double conductivity) {
     double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
     double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
@@ -682,8 +746,7 @@ double calculateSalinity(double temperature, double conductivity) {
         );
     regulRebouclage.mesure = desalinatorData.salinity;
     return desalinatorData.salinity;
-}
-
+}*/
 
 void readJSON(char* json) {
     StaticJsonDocument<512> doc;
@@ -713,6 +776,15 @@ void readJSON(char* json) {
     case 14:
         receiveParams(doc);
         break;
+    case 21:
+        // REQ_SALINITY_FACTORS - Envoi des facteurs correctifs
+        sendSalinityFactors();
+        break;
+
+    case 22:
+        // SEND_SALINITY_FACTORS - Reception des facteurs correctifs
+        receiveSalinityFactors(doc);
+        break;
 
     case 11:
         // Les donnees sont envoyees periodiquement
@@ -722,6 +794,38 @@ void readJSON(char* json) {
         Serial.print("Unknown command: ");
         Serial.println(command);
         break;
+    }
+}
+
+
+void sendSalinityFactors() {
+    StaticJsonDocument<600> doc;
+
+    doc["cmd"] = (int)22;
+    doc["cID"] = PLCID;
+    doc["sID"] = PLCID;
+    doc["time"] = RTC.getTime();
+    doc["factorDesalinator"] = factorDesalinator;
+
+    serializeJson(doc, buffer, sizeof(buffer));
+    Serial.println("Sending salinity factors:");
+    Serial.println(buffer);
+    webSocket.sendTXT(buffer);
+}
+
+void receiveSalinityFactors(StaticJsonDocument<512>& doc) {
+    bool updated = false;
+
+    if (doc.containsKey("factorDesalinator")) {
+        factorDesalinator = doc["factorDesalinator"];
+        EEPROM.writeDouble(factorAddress, factorDesalinator);
+        Serial.print("Control correction factor updated to: ");
+        Serial.println(factorDesalinator, 4);
+        updated = true;
+    }
+
+    if (updated) {
+        Serial.println("All salinity correction factors updated successfully");
     }
 }
 

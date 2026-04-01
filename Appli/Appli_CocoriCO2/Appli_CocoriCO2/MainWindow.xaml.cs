@@ -523,7 +523,7 @@ namespace Appli_CocoriCO2
             return false;
         }
 
-        private void sendSlackMessage(String msg)
+        public void sendSlackMessage(String msg)
         {
             string TOKEN = Properties.Settings.Default["SlackToken"].ToString();  // token from last step in section above
             var slackClient = new SlackTaskClient(TOKEN);
@@ -578,7 +578,7 @@ namespace Appli_CocoriCO2
         private WebSocketServer _server;
         public List<IWebSocketConnection> _sockets;
 
-
+        public bool automateSalFreezed = false;
 
 
         //public List<Condition> conditions;
@@ -789,8 +789,10 @@ namespace Appli_CocoriCO2
 
 
 
-           
+            if (salinityData.lastUpdated < DateTime.Now - TimeSpan.FromSeconds(60)) automateSalFreezed = true;
+            else automateSalFreezed = false;
 
+            checkAlarme("Alarm Automate Salinity Freezed", automateSalFreezed, false);
             checkAlarme("Alarm Desalinator Pump Off", desalinatorData.pompeHP, true);
 
             checkAlarme("Alarm Pressure Desalinator Inlet", desalinatorData.pressionEntree, desalinatorParams.regulPressionEntree.consigne);
@@ -885,7 +887,9 @@ namespace Appli_CocoriCO2
             bool e;
             double d;
 
-
+            Alarme freeze = new Alarme();
+            freeze.set("Alarm Automate Salinity Freezed", true, 0, 0, TimeSpan.FromSeconds(30));
+            alarms.Add(freeze);
             cond = "C0";
             Boolean.TryParse(Properties.Settings.Default["AlarmPressure"].ToString(), out e);
             Double.TryParse(Properties.Settings.Default["PressureDelta"].ToString(), out d);
@@ -916,7 +920,7 @@ namespace Appli_CocoriCO2
             alarms.Add(ps3);
 
             Alarme ps4 = new Alarme();
-            ps4.set("Alarm Pressure Desalinator HP", e, 0, 0, TimeSpan.FromSeconds(30));
+            ps4.set("Alarm Pressure Desalinator HP", e, 0, -5, TimeSpan.FromSeconds(30));
             alarms.Add(ps4);
 
             Boolean.TryParse(Properties.Settings.Default["AlarmSalinity"].ToString(), out e);
@@ -1073,8 +1077,8 @@ namespace Appli_CocoriCO2
                         case 0://REQ PARAMS ==> send params to PLC
 
 
-                            conditions[t.cID].rTemp.consigne = ambiantConditions.temperature + conditions[t.cID].rTemp.offset;
-                            if (t.cID > 0) conditions[t.cID].rpH.consigne = ambiantConditions.pH + conditions[t.cID].rpH.offset;
+                            conditions[t.cID].rTemp.consigne = ambiantConditions.C0_temp + conditions[t.cID].rTemp.offset;
+                            if (t.cID > 0) conditions[t.cID].rpH.consigne = ambiantConditions.C0_pH + conditions[t.cID].rpH.offset;
                             var response = new
                             {
                                 cmd = 2,
@@ -1134,8 +1138,9 @@ namespace Appli_CocoriCO2
                             });
                             if (t.cID > 0 && t.cID <= 3)
                             {
-                                conditions[t.cID].rTemp.consigne = ambiantConditions.temperature + conditions[t.cID].rTemp.offset;
-                                conditions[t.cID].rpH.consigne = ambiantConditions.pH + conditions[t.cID].rpH.offset;
+                                double moyennepHC0 = (conditions[0].Meso[0].pH + conditions[0].Meso[1].pH + conditions[0].Meso[2].pH) / 3;
+                                conditions[t.cID].rTemp.consigne = ambiantConditions.C0_temp + conditions[t.cID].rTemp.offset;
+                                conditions[t.cID].rpH.consigne = moyennepHC0 + conditions[t.cID].rpH.offset;
                                 var respons = new
                                 {
                                     cmd = 2,
@@ -1508,7 +1513,8 @@ namespace Appli_CocoriCO2
                         else
                         {
                             if (selctedcondID < 0 || selctedcondID > 10) selctedcondID = 0;
-                            expSettingsWindow.tb_pH_measure.Text = conditions[selctedcondID].pH.ToString("F2");
+                            if (selctedcondID == 0) expSettingsWindow.tb_pH_measure.Text = conditions[0].pH.ToString("F2");
+                            else expSettingsWindow.tb_pH_measure.Text = ((conditions[selctedcondID].Meso[0].pH + conditions[selctedcondID].Meso[1].pH + conditions[selctedcondID].Meso[2].pH) / 3).ToString("F2");
                             expSettingsWindow.tb_pH_PIDoutput.Text = conditions[selctedcondID].rpH.sortiePID_pc.ToString("F2");
                             expSettingsWindow.tb_Temp_measure.Text = conditions[selctedcondID].temperature.ToString("F2");
                             expSettingsWindow.tb_Temp_PIDoutput.Text = conditions[selctedcondID].rTemp.sortiePID_pc.ToString("F2");
@@ -1757,6 +1763,7 @@ namespace Appli_CocoriCO2
 
 
                         label_C0_pH_CO2.Content = string.Format(ci, "pH measure: {0:0.00}", conditions[0].pH);
+                        //label_C0_pH_CO2.Content = string.Format(ci, "pH measure: {0:0.00}", expSettingsWindow.l);
                         // label_C0_Temp.Content = string.Format(ci, "T°C: {0:0.00}°C", conditions[0].temperature);
                         label_C0_Salinity_Tank.Content = string.Format(ci, "Salinity: {0:0.00}", salinityData.saliniteC0);
                         label_C1_pH.Content = string.Format(ci, "pH: {0:0.00}", conditions[1].pH);
@@ -2039,11 +2046,18 @@ namespace Appli_CocoriCO2
         private void Window_Closing(object sender, CancelEventArgs e)
         {
             Properties.Settings.Default.Save();
-            comDebugWindow.Close();
-            expSettingsWindow.Close();
-            alarmsListWindow.Close();
-            desalinatorWindow.Close();
-            System.Windows.Application.Current.Shutdown();
+            Alarme a = new Alarme();
+            a.sendSlackMessage("APPLICATION CLOSED");
+            Task.Delay(500).ContinueWith(_ =>
+            {
+
+                comDebugWindow.Close();
+                expSettingsWindow.Close();
+                alarmsListWindow.Close();
+                desalinatorWindow.Close();
+                referenceCTDWindow.Close();
+                System.Windows.Application.Current.Shutdown();
+            });
         }
 
         private void Ellipse_MouseDown_1(object sender, MouseButtonEventArgs e)
