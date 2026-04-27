@@ -3,8 +3,42 @@
  Created:	18/09/2025 16:13:00
  Author:	pierr
  Description: Regulation de salinite pour 4 conditions (C0-C3) avec communication WebSocket
+
+ =========================================================================
+ === PATCHES 2026-04-23 (to address random freezes / data-loss symptom) ==
+ =========================================================================
+  [1] CTD buffer: replaced unbounded `String CTDString` with a fixed-size
+      char buffer. The previous code appended to a String inside a loop and
+      only reset on '\n'; when the CTD misses its terminator (confirmed to
+      happen occasionally) the String grew indefinitely and fragmented the
+      heap — the most probable root cause of the days-to-weeks random freeze.
+  [2] WebSocket reconnect: previously WStype_DISCONNECTED only printed to
+      serial; any network blip left the PLC permanently silent, matching
+      the observed "last recorded value" symptom on the central app.
+      The installed WebSocketsClient library on this PLC does NOT expose
+      setReconnectInterval(), so we track connection state from the
+      CONNECTED/DISCONNECTED events and manually call begin() again every
+      WS_RECONNECT_MS while disconnected. Works on any library version.
+  [3] Watchdog timer (wdt 8s): auto-reboot on any hang. Includes wdt_disable
+      at start of setup() to break any reboot loop caused by a bad saved
+      state.
+  [4] Modbus per-sensor timeout: if a single sensor read cycle exceeds 3 s
+      the state machine advances anyway. One bad probe no longer stalls
+      the whole loop (which in turn was starving webSocket.loop()).
+  [5] JSON document + char buffer size bumped (600->1024, 800->1200). Field
+      count (33) and serialized length (~890 chars) were right at/over the
+      previous margins, silently truncating on occasion.
+  [6] Free-memory diagnostic added to the 1 Hz serial printout so a
+      downward trend (= leak) is visible at a glance.
+  [7] Optional SD logging (ENABLE_SD_LOGGING). Default OFF because the
+      default CS pin (4) is currently used by pinV3VC0 on this PLC. If you
+      wire the SD CS to a free pin, set the #define to 1 and update
+      SD_CS_PIN.
+  [8] (Desalinator.h) Fixed broken sscanf in setRtcTimeFromCompileTime.
+ =========================================================================
 */
 
+#include <avr/wdt.h>          // [3] 2026-04-23: watchdog
 #include <EEPROMex.h>
 #include <ArduinoJson.h>
 #include <Ethernet.h>
@@ -12,6 +46,15 @@
 
 #include <C:\Users\Max\Desktop\Code MITIC\MITIC-Meze_MITIC_v2\Desalinator\Desalinator\Desalinator.h>
 //#include "C:/Users/pierr/Dropbox/Pierre/CNRS/repos/MITIC/Desalinator/Desalinator/Desalinator.h"
+
+// [7] 2026-04-23: SD logging toggle — leave OFF unless SD CS is on a free pin
+#define ENABLE_SD_LOGGING 0
+#if ENABLE_SD_LOGGING
+#include <SD.h>
+#define SD_CS_PIN 4   // WARNING: conflicts with pinV3VC0. Change before enabling.
+bool sdAvailable = false;
+tempo tempoSDLog;
+#endif
 
 typedef struct Calibration {
     int sensorID;
@@ -44,6 +87,18 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xBB, PLCID };
 IPAddress ip(192, 168, 1, 160 + PLCID);
 WebSocketsClient webSocket;
 
+// [2] 2026-04-23 (revised 2026-04-23): manual reconnect.
+// The installed WebSocketsClient library does not expose
+// setReconnectInterval(), so we track the connection state from the
+// WStype_CONNECTED / WStype_DISCONNECTED events and call begin() again
+// every WS_RECONNECT_MS while disconnected. Works on any library version.
+const char* WS_HOST = "192.168.1.10";
+const uint16_t WS_PORT = 81;
+const char* WS_PATH = "/";
+const unsigned long WS_RECONNECT_MS = 5000;
+bool wsConnected = false;
+unsigned long wsLastReconnectAttempt = 0;
+
 /***** RS485 *****/
 ModbusRtu master(0, 3, 46);
 tempo tempoMBSensorsRead;
@@ -62,8 +117,18 @@ bool readSensors = true;
 int currentSensor = 0;
 bool readingCond = false;  // false = temp, true = cond
 
+// [4] 2026-04-23: per-sensor read-cycle timeout to avoid one bad probe
+// stalling the whole loop. If the state machine does not complete within
+// MB_SENSOR_TIMEOUT_MS it is force-advanced to the next sensor.
+unsigned long mbSensorCycleStart = 0;
+const unsigned long MB_SENSOR_TIMEOUT_MS = 3000;
+
 /***** RS232 CTD *****/
-String CTDString = "";
+// [1] 2026-04-23: fixed-size buffer replaces dynamic String to prevent
+// heap fragmentation when CTD drops '\n' terminators.
+#define CTD_BUF_SIZE 128
+char ctdBuf[CTD_BUF_SIZE];
+int ctdIdx = 0;
 unsigned long prevtempoRS232 = 0;
 const unsigned long tempoRS232 = 10000;
 
@@ -127,7 +192,9 @@ struct SalinityData {
 
 SalinityData salinityData;
 CTDData ctdData;
-char buffer[800];
+// [5] 2026-04-23: bumped from 800 -> 1200; serialized JSON was ~890 chars,
+// previously within truncation risk.
+char buffer[1200];
 
 // Ratios de débit pour régulation
 double ratioC0 = 0.0;
@@ -163,6 +230,18 @@ enum {
 
 /***** FUNCTIONS *****/
 
+// [6] 2026-04-23: free-RAM probe for leak diagnostics (AVR only).
+extern unsigned int __heap_start;
+extern void* __brkval;
+int freeMemory() {
+    int free_memory;
+    if ((int)__brkval == 0)
+        free_memory = ((int)&free_memory) - ((int)&__heap_start);
+    else
+        free_memory = ((int)&free_memory) - ((int)__brkval);
+    return free_memory;
+}
+
 float readFlow(uint8_t pin) {
     int ana = analogRead(pin);
     int mA = map(ana, 0, 1023, 0, 2000);
@@ -172,36 +251,12 @@ float readFlow(uint8_t pin) {
     return debit;
 }
 
-/*double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
-    double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
-    double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
-    double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
-    double k = 0.0162;
-    double C_ref = 42914.0;
-    double R = conductivity / C_ref;
-    double r_t = c[0] + c[1] * temperature + c[2] * pow(temperature, 2) +
-        c[3] * pow(temperature, 3) + c[4] * pow(temperature, 4);
-    double R_t = R / r_t;
-    double rawSalinity = (
-        a[0] + a[1] * pow(R_t, 0.5) + a[2] * R_t + a[3] * pow(R_t, 1.5) +
-        a[4] * pow(R_t, 2) + a[5] * pow(R_t, 2.5) +
-        ((temperature - 15.0) / (1.0 + k * (temperature - 15.0))) *
-        (b[0] + b[1] * pow(R_t, 0.5) + b[2] * R_t + b[3] * pow(R_t, 1.5) +
-            b[4] * pow(R_t, 2) + b[5] * pow(R_t, 2.5))
-        );
-
-    // Appliquer le facteur correctif
-    return rawSalinity * correctionFactor;
-}*/
-
 double calculateSalinity(double temperature, double conductivity, double correctionFactor = 1.0) {
     double a[] = { 0.0080, -0.1692, 25.3851, 14.0941, -7.0261, 2.7081 };
     double b[] = { 0.0005, -0.0056, -0.0066, -0.0375, 0.0636, -0.0144 };
     double c[] = { 0.6766097, 2.00564e-2, 1.104259e-4, -6.9698e-7, 1.0031e-9 };
     double k = 0.0162;
     double C_ref = 42914.0;
-    //double correctedConductivity = correctionFactor * conductivity;
-    //double R = correctedConductivity / C_ref;
     double R = conductivity / C_ref;
     double r_t = c[0] + c[1] * temperature + c[2] * pow(temperature, 2) +
         c[3] * pow(temperature, 3) + c[4] * pow(temperature, 4);
@@ -263,6 +318,21 @@ void readMBSensors() {
         calibrateSensor();
     }
     else {
+        // [4] 2026-04-23: start timer on first entry of a sensor's cycle,
+        // force-advance if the cycle takes too long.
+        if (mbSensorCycleStart == 0) mbSensorCycleStart = millis();
+        if ((millis() - mbSensorCycleStart) > MB_SENSOR_TIMEOUT_MS) {
+            Serial.print(F("[WDG] MB sensor "));
+            Serial.print(currentSensor + 1);
+            Serial.println(F(" timeout - skipping"));
+            readingCond = false;
+            currentSensor++;
+            if (currentSensor >= 5) currentSensor = 0;
+            mbSensorCycleStart = 0;
+            readSensors = false;
+            return;
+        }
+
         if (!readingCond) {
             // Lecture température
             if (mbSensor[currentSensor].readTemp(&master)) {
@@ -292,28 +362,28 @@ void readMBSensors() {
                 // Stocker conductivité et calculer salinité selon le capteur avec facteur correctif
                 switch (currentSensor) {
                 case 0:
-                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue*factorControl;
+                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue * factorControl;
 
                     salinityData.saliniteControl = calculateSalinity(salinityData.temperatureControl, salinityData.conductiviteControl, factorControl);
 
                     break;
                 case 1:
-                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue*factorC3;
+                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue * factorC3;
                     salinityData.saliniteC3 = calculateSalinity(salinityData.temperatureC3, salinityData.conductiviteC3, factorC3);
                     break;
                 case 2:
-                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue*factorC2;
+                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue * factorC2;
                     salinityData.saliniteC2 = calculateSalinity(salinityData.temperatureC2, salinityData.conductiviteC2, factorC2);
                     regulC2.mesure = salinityData.saliniteC2;
                     regulC2_filtre.mesure = salinityData.saliniteC2;
                     break;
                 case 3:
-                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue*factorC1;
+                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue * factorC1;
                     salinityData.saliniteC1 = calculateSalinity(salinityData.temperatureC1, salinityData.conductiviteC1, factorC1);
                     regulC1.mesure = salinityData.saliniteC1;
                     break;
                 case 4:
-                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue*factorC0;
+                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue * factorC0;
                     salinityData.saliniteC0 = calculateSalinity(salinityData.temperatureC0, salinityData.conductiviteC0, factorC0);
                     break;
                 }
@@ -323,35 +393,13 @@ void readMBSensors() {
                 if (currentSensor >= 5) {
                     currentSensor = 0;
                 }
+                mbSensorCycleStart = 0;   // [4] 2026-04-23: cycle complete
                 readSensors = false;
             }
         }
     }
 
 }
-/*
-bool salinite = true;
-void readMBSensors() {
-    mbSensor[4].query.u8id = 1;
-    if (salinite) {
-        if (mbSensor[4].readCond(&master)) {
-            Serial.print("Sensor "); Serial.print(1); Serial.print(": Conductivity: ");
-            Serial.println(mbSensor[4].cond_sensorValue);
-            salinite = false;
-        }
-    }
-    else {
-        if (mbSensor[4].readTemp(&master)) {
-            Serial.print("Sensor "); Serial.print(1); Serial.print(": Temperature: ");
-            Serial.println(mbSensor[4].temp_sensorValue);
-            Serial.println("Salinity:"+String(calculateSalinity(mbSensor[4].temp_sensorValue, mbSensor[4].cond_sensorValue)));
-
-            salinite = true;
-
-            readSensors = false;
-        }
-    }
-}*/
 
 void readAnaSensors() {
     salinityData.debitC0 = readFlow(pinDebitC0);
@@ -426,6 +474,9 @@ void parseCTDData(String data) {
     Serial.print("  Time: "); Serial.println(ctdData.Time);
 }
 
+// [1] 2026-04-23: rewritten with fixed char buffer. If the CTD drops its
+// '\n' terminator, the buffer still gets flushed when full (no more
+// unbounded heap growth).
 void readRS232() {
     // Send command periodically
     if (millis() - prevtempoRS232 > tempoRS232) {
@@ -436,24 +487,23 @@ void readRS232() {
     // Read incoming data non-blocking
     while (Serial2.available() > 0) {
         char c = (char)Serial2.read();
-        if (c == '\n') {
-            // End of message → clean and parse
-            CTDString.replace('\r', ' ');
-            CTDString.replace('\n', ' ');
-            CTDString.replace('#', ' ');
-            CTDString.trim();
-
-            Serial.print("RS232 received: ");
-            Serial.println(CTDString);
-
-            // Parse CTD data
-            parseCTDData(CTDString);
-
-            // Reset for next message
-            CTDString = "";
+        if (c == '\n' || ctdIdx >= CTD_BUF_SIZE - 1) {
+            // End of message or buffer full -> process and reset
+            ctdBuf[ctdIdx] = '\0';
+            if (ctdIdx > 0) {
+                // Build a single, bounded String for the existing parser
+                String s(ctdBuf);
+                s.replace('\r', ' ');
+                s.replace('#', ' ');
+                s.trim();
+                Serial.print("RS232 received: ");
+                Serial.println(s);
+                parseCTDData(s);
+            }
+            ctdIdx = 0;
         }
         else {
-            CTDString += c;
+            ctdBuf[ctdIdx++] = c;
         }
     }
 }
@@ -582,17 +632,12 @@ void initRegul() {
     regulC2.setPID(regulC2.Kp, regulC2.Ki, regulC2.Kd, 0, 255, REVERSE);
     regulC3.setPID(regulC3.Kp, regulC3.Ki, regulC3.Kd, 0, 255, REVERSE);
     regulC2_filtre.setPID(regulC2_filtre.Kp, regulC2_filtre.Ki, regulC2_filtre.Kd, 0, 255, DIRECT);
-    /*
-    Serial.print(regulC0.Kp, regulC0.Ki, regulC0.Kd);
-    Serial.print(regulC1.Kp, regulC1.Ki, regulC1.Kd);
-    Serial.print(regulC2.Kp, regulC2.Ki, regulC2.Kd);
-    Serial.print(regulC3.Kp, regulC3.Ki, regulC3.Kd);
-    */
 }
 
 void sendData() {
     if (elapsed(&tempoSendData)) {
-        StaticJsonDocument<600> doc;
+        // [5] 2026-04-23: bumped 600 -> 1024 (33 fields was at capacity)
+        StaticJsonDocument<1024> doc;
         doc["cmd"] = SEND_SALINITY_DATA;
         doc["cID"] = PLCID;
         doc["sID"] = PLCID;
@@ -642,7 +687,8 @@ void sendData() {
 }
 
 void sendParams() {
-    StaticJsonDocument<600> doc;
+    // [5] 2026-04-23: bumped 600 -> 1024 for safety with nested objects
+    StaticJsonDocument<1024> doc;
     doc["cmd"] = SEND_SALINITY_PARAMS;
     doc["cID"] = PLCID;
     doc["sID"] = PLCID;
@@ -698,7 +744,7 @@ void sendParams() {
     webSocket.sendTXT(buffer);
 }
 
-void receiveParams(StaticJsonDocument<600>& doc) {
+void receiveParams(StaticJsonDocument<1024>& doc) {
 
     JsonObject regul = doc["regulC0"];
     if (doc.containsKey("regulC0")) {
@@ -793,10 +839,14 @@ void receiveParams(StaticJsonDocument<600>& doc) {
 void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     switch (type) {
     case WStype_DISCONNECTED:
+        // [2] 2026-04-23: track state for manual reconnect
+        wsConnected = false;
         Serial.println("WebSocket Disconnected!");
         break;
 
     case WStype_CONNECTED:
+        // [2] 2026-04-23: track state for manual reconnect
+        wsConnected = true;
         Serial.println("WebSocket Connected!");
         webSocket.sendTXT("Connected");
         break;
@@ -813,7 +863,7 @@ void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     }
 }
 
-void receiveRatios(StaticJsonDocument<600>& doc) {
+void receiveRatios(StaticJsonDocument<1024>& doc) {
     ratioC0 = doc["ratioC0"];
     ratioC1 = doc["ratioC1"];
     ratioC2 = doc["ratioC2"];
@@ -827,7 +877,8 @@ void receiveRatios(StaticJsonDocument<600>& doc) {
 }
 
 void sendSalinityFactors() {
-    StaticJsonDocument<600> doc;
+    // [5] 2026-04-23: bumped 600 -> 1024 for consistency
+    StaticJsonDocument<1024> doc;
 
     doc["cmd"] = (int)SEND_SALINITY_FACTORS;
     doc["cID"] = PLCID;
@@ -845,7 +896,7 @@ void sendSalinityFactors() {
     webSocket.sendTXT(buffer);
 }
 
-void receiveSalinityFactors(StaticJsonDocument<600>& doc) {
+void receiveSalinityFactors(StaticJsonDocument<1024>& doc) {
     bool updated = false;
     int factorAddress = EEPROMSalinityFactorsAddress;
 
@@ -899,7 +950,8 @@ void receiveSalinityFactors(StaticJsonDocument<600>& doc) {
 }
 
 void readJSON(char* json) {
-    StaticJsonDocument<600> doc;
+    // [5] 2026-04-23: bumped 600 -> 1024
+    StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, json);
 
     if (error) {
@@ -957,11 +1009,54 @@ void readJSON(char* json) {
     }
 }
 
+#if ENABLE_SD_LOGGING
+// [7] 2026-04-23: periodic SD snapshot for post-crash forensics.
+void logToSD() {
+    if (!sdAvailable) return;
+    if (!elapsed(&tempoSDLog)) return;
+    File f = SD.open("saldata.csv", FILE_WRITE);
+    if (!f) return;
+    // Header on first write
+    if (f.size() == 0) {
+        f.println(F("time,freeRAM,salC0,salC1,salC2,salC3,salCtrl,tC0,tC1,tC2,tC3,tCtrl,dC0,dC1,dC2,dC3,vC0,vC1,vC2,vC3,vC2f"));
+    }
+    f.print(RTC.getTime()); f.print(',');
+    f.print(freeMemory()); f.print(',');
+    f.print(salinityData.saliniteC0); f.print(',');
+    f.print(salinityData.saliniteC1); f.print(',');
+    f.print(salinityData.saliniteC2); f.print(',');
+    f.print(salinityData.saliniteC3); f.print(',');
+    f.print(salinityData.saliniteControl); f.print(',');
+    f.print(salinityData.temperatureC0); f.print(',');
+    f.print(salinityData.temperatureC1); f.print(',');
+    f.print(salinityData.temperatureC2); f.print(',');
+    f.print(salinityData.temperatureC3); f.print(',');
+    f.print(salinityData.temperatureControl); f.print(',');
+    f.print(salinityData.debitC0); f.print(',');
+    f.print(salinityData.debitC1); f.print(',');
+    f.print(salinityData.debitC2); f.print(',');
+    f.print(salinityData.debitC3); f.print(',');
+    f.print(salinityData.vanneC0); f.print(',');
+    f.print(salinityData.vanneC1); f.print(',');
+    f.print(salinityData.vanneC2); f.print(',');
+    f.print(salinityData.vanneC3); f.print(',');
+    f.println(salinityData.vanneC2_filtre);
+    f.close();
+}
+#endif
+
 
 void setup() {
+    // [3] 2026-04-23: disable watchdog immediately to avoid reboot loop if
+    // a previous WDT reset left the prescaler in a short state. Enabled
+    // again at the end of setup().
+    wdt_disable();
+
     Serial.begin(115200);
     Serial2.begin(9600);    // RS232 port for CTD
     Serial.println("MITIC Salinity Regulation - Starting...");
+    Serial.println(F("[2026-04-23 build] free RAM at boot:"));
+    Serial.println(freeMemory());
 
     // Init pins
     pinMode(pinV3VC0, OUTPUT);
@@ -988,8 +1083,10 @@ void setup() {
     Serial.println(Ethernet.localIP());
 
     // Init WebSocket connection
-    webSocket.begin("192.168.1.10", 81, "/");
+    webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
     webSocket.onEvent(webSocketEvent);
+    // [2] 2026-04-23: manual reconnect handled in loop() (see WS_RECONNECT_MS).
+    wsLastReconnectAttempt = millis();
 
     // Init RTC
     if (true) setRtcTimeFromCompileTime();
@@ -1004,7 +1101,24 @@ void setup() {
     // Init Regul
     initRegul();
 
+#if ENABLE_SD_LOGGING
+    // [7] 2026-04-23: init SD card for forensic logging
+    if (SD.begin(SD_CS_PIN)) {
+        sdAvailable = true;
+        Serial.println(F("SD init OK"));
+    }
+    else {
+        Serial.println(F("SD init FAILED - logging disabled"));
+    }
+    tempoSDLog.debut = 0;
+    tempoSDLog.interval = 60000;   // log every 60 s
+#endif
+
     Serial.println("Setup complete - Ready for communication");
+
+    // [3] 2026-04-23: enable 8 s watchdog AFTER init is done. Any freeze
+    // longer than 8 s will now auto-reset the PLC.
+    wdt_enable(WDTO_8S);
 }
 
 static unsigned long lastTest = 0;
@@ -1015,10 +1129,23 @@ void loop() {
         lastWebSocketUpdate = millis();
     }
 
+    // [2] 2026-04-23: manual WebSocket reconnect. If disconnected, try
+    // begin() again every WS_RECONNECT_MS. Compatible with any version
+    // of WebSocketsClient (the library on this PLC does not expose
+    // setReconnectInterval()).
+    if (!wsConnected && (millis() - wsLastReconnectAttempt) > WS_RECONNECT_MS) {
+        Serial.println(F("[WS] reconnect attempt..."));
+        webSocket.disconnect();
+        webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
+        wsLastReconnectAttempt = millis();
+    }
+
     // Affichage des données toutes les secondes
     if (millis() - lastTest > 1000) {
         lastTest = millis();
         Serial.println(F("******* REGULATIONS ****"));
+        // [6] 2026-04-23: free-RAM trend for leak detection
+        Serial.print(F("FREE RAM: ")); Serial.println(freeMemory());
         Serial.print(F("regulC0.consigne: ")); Serial.println(regulC0.consigne);
         Serial.print(F("regulC1.consigne: ")); Serial.println(regulC1.consigne);
         Serial.print(F("regulC2.consigne: ")); Serial.println(regulC2.consigne);
@@ -1082,4 +1209,12 @@ void loop() {
     readRS232();
     Regulations();
     sendData();
+
+#if ENABLE_SD_LOGGING
+    logToSD();
+#endif
+
+    // [3] 2026-04-23: reset watchdog at end of every loop iteration.
+    // If anything above hangs for >8 s the PLC reboots automatically.
+    wdt_reset();
 }

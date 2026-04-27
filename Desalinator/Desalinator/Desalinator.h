@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <EEPROMex.h>
 #include <PID_v1.h>
 #include <ModbusRtu.h>
@@ -6,6 +6,18 @@
 #include <TimeLib.h>
 #include <RTC.h>
 
+/*
+ =========================================================================
+ === PATCH 2026-04-23 ====================================================
+ =========================================================================
+  setRtcTimeFromCompileTime(): previous implementation passed an int*
+  to "%s" in sscanf, which wrote "Sep\0" (4 bytes) into a 2-byte int and
+  overflowed onto the stack. The RTC was being initialised with a
+  garbage month on every boot and the stack corruption was one more
+  suspect in the random-freeze investigation. Replaced with a proper
+  char[4] buffer and explicit month-name -> int mapping.
+ =========================================================================
+*/
 
 unsigned long dateToTimestamp(int year, int month, int day, int hour, int minute, int second) {
 
@@ -21,17 +33,25 @@ unsigned long dateToTimestamp(int year, int month, int day, int hour, int minute
     return unixTime;
 }
 
+// [2026-04-23] rewritten: see patch block above.
 void setRtcTimeFromCompileTime() {
-    // Get compile date and time
-    const char* compileDate = __DATE__;
-    const char* compileTime = __TIME__;
+    const char* compileDate = __DATE__;   // e.g. "Sep 18 2025"
+    const char* compileTime = __TIME__;   // e.g. "16:13:00"
 
-    // Parse compile date
-    int month, day, year;
-    sscanf(compileDate, "%s %d %d", &month, &day, &year);
+    char monthStr[4] = { 0 };
+    int day = 1, year = 2025;
+    sscanf(compileDate, "%3s %d %d", monthStr, &day, &year);
 
-    // Parse compile time
-    int hour, minute, second;
+    const char months[12][4] = {
+        "Jan","Feb","Mar","Apr","May","Jun",
+        "Jul","Aug","Sep","Oct","Nov","Dec"
+    };
+    int month = 1;
+    for (int i = 0; i < 12; i++) {
+        if (strcmp(monthStr, months[i]) == 0) { month = i + 1; break; }
+    }
+
+    int hour = 0, minute = 0, second = 0;
     sscanf(compileTime, "%d:%d:%d", &hour, &minute, &second);
 
     RTC.setTime(dateToTimestamp(year, month, day, hour, minute, second));
@@ -338,13 +358,13 @@ public:
     double compute() {
         // protection si la mesure est invalide
         if (isnan(mesure)) {
-            // n'exécutez pas le PID si la mesure est NaN — renvoyez 0 pour sécurité
+            // n'exï¿½cutez pas le PID si la mesure est NaN ï¿½ renvoyez 0 pour sï¿½curitï¿½
             sortiePID = 0.0;
             sortiePID_pc = 0.0;
             return sortiePID;
         }
 
-        // exécutez le PID normalement
+        // exï¿½cutez le PID normalement
         pid->Compute();
         sortiePID_pc = (int)(sortiePID * 100.0 / 255.0);
         return sortiePID;
@@ -379,11 +399,11 @@ public:
         consigneForcage = EEPROM.readInt(add); add += sizeof(int);
 
         useOffset = EEPROM.readInt(add); add += sizeof(int);
-        
+
         return add;
     }
 
-    void setPID(double kp, double ki, double kd,int _Min, int _Max, int sens) {
+    void setPID(double kp, double ki, double kd, int _Min, int _Max, int sens) {
 
         pid->myInput = &mesure;
         pid->myOutput = &sortiePID;

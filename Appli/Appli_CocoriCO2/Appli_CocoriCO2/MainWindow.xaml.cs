@@ -1219,7 +1219,8 @@ namespace Appli_CocoriCO2
                             desalinatorParams.regulPressionEntree.sortiePID_pc = desalinatorData.vanneEntree;
                             lastDataReceived = DateTime.Now;
 
-                            if(!prevPompeHPStatus && prevPompeHPStatus != desalinatorData.pompeHP)
+                            //if pump was on and it is now off, force regulSalinite Valves
+                            if(prevPompeHPStatus && prevPompeHPStatus != desalinatorData.pompeHP)
                             {
                                 salinityRegulParams.regulSaliniteC0.autorisationForcage = true;
                                 salinityRegulParams.regulSaliniteC1.autorisationForcage = true;
