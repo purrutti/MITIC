@@ -1236,14 +1236,15 @@ namespace Appli_CocoriCO2
                                 var responseForceVannes = new
                                 {
                                     cmd = 18,
-                                    cID = t.cID,
+                                    cID = 8,//Mettre ici l'ID du PLC "regulSalinite" = 8
                                     sID = 4,//Server
                                     regulRebouclage = desalinatorParams.regulRebouclage,
                                     regulPressionEntree = desalinatorParams.regulPressionEntree,
                                     regulPressionSaumure = desalinatorParams.regulPressionSaumure,
                                     regulPressionFresh = desalinatorParams.regulPressionFresh
                                 };
-                                s = JsonConvert.SerializeObject(responseForceVannes);
+                                SendWebSocketCommand(JsonConvert.SerializeObject(responseForceVannes));
+
                             }
                             break;
 
