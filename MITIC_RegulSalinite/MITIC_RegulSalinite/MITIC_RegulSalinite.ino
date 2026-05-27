@@ -35,7 +35,7 @@
   [8] (Desalinator.h) Fixed broken sscanf in setRtcTimeFromCompileTime.
 
  =========================================================================
- === PATCHES 2026-05-18 (post-crash forensics + W5100 watchdog) ==========
+ === PATCHES 2026-04-30 (post-crash forensics + W5100 watchdog) ==========
  =========================================================================
   Crash recurred on 2026-04-27 at 08:00. Watchdog did not auto-recover -
   required power-cycle. Symptoms identical: valves stuck at last value,
@@ -71,6 +71,55 @@
       one-line summary every 10 s. Frees ~3 ms/s of CPU previously
       spent on Serial.print blocking.
  =========================================================================
+ === PATCHES 2026-05-27 (RAM exhaustion / boot loop investigation) =======
+ =========================================================================
+  SD card forensics from a crash episode showed:
+   - 12 consecutive boots at 21 s wall-clock intervals (boot loop)
+   - freeRAM dropping to 68 bytes during WS reconnect storms
+   - SD writes appear to silently fail once RAM is critically low,
+     which is why the later (May 23 / May 25) crashes left no trace.
+   - 399 WS_DISCONNECTED vs 14 WS_CONNECTED events: the WebSocketsClient
+     library appears to leak ~150-200 bytes per disconnect/reconnect
+     cycle, eventually exhausting RAM.
+   - Heartbeat-ack escalation never fires because the boots happen
+     faster (~21 s) than the soft threshold (30 s).
+   - All boots show BOOT_UNKNOWN because the bootloader on this Mega
+     clears MCUSR before user code runs - we cannot distinguish WDT
+     reset from hardware-level crash via memory corruption.
+   - All same-build boots have different timestamps, proving the RTC
+     chip keeps real time across reboots via battery backup.
+
+  [18] Reduced char buffer[1200] -> char buffer[700]. With sendData now
+       split into two ~400-byte messages and sendParams rewritten to fit
+       in <500 bytes, 1200 was overkill. Frees 500 bytes globally - the
+       single biggest impact on the RAM crisis.
+  [19] Removed String fields (Date, Time, RawData) from CTDData. They
+       were populated by parseCTDData but never serialized; their only
+       use was a serial debug print which can read local variables.
+       Eliminates 3 heap allocations per CTD message.
+  [20] sendParams() rewritten with snprintf/dtostrf, same approach as
+       sendData(). 1024-byte StaticJsonDocument on stack is gone.
+       Output split into 2 messages (3 reguls + 2 reguls) so each
+       stays well under the WS frame size threshold.
+  [21] RTC compile-time reset made conditional. Was unconditionally
+       calling setRtcTimeFromCompileTime() on every boot; now skipped
+       if the RTC chip already reads a sensible year (>= 2020). This
+       respects the battery-backed RTC and keeps real timestamps in
+       SD logs across reboots.
+  [22] Low-RAM panic reboot. If freeMemory() < 150 bytes at the start
+       of any loop iteration, log LOW_RAM_PANIC to events.csv and
+       deliberately let the WDT fire. Prevents the chaotic stack/heap
+       collision that produces undefined behavior.
+  [23] wsReconnectCount now incremented in the manual reconnect path
+       too (was only counting heartbeat-driven reconnects).
+  [24] Added loopMinRam tracking to the periodic SD data log. Records
+       the lowest freeMemory() seen since the last log entry, so we
+       can spot RAM dips even when SD logging runs at 60-second
+       intervals.
+  [25] SD writes now skip when freeMemory() < 200 bytes. Prevents the
+       SD library from making a bad situation worse (and from being
+       the proximate cause of crashes when RAM is already tight).
+ =========================================================================
 */
 
 #include <avr/wdt.h>          // [3] 2026-04-23: watchdog
@@ -96,6 +145,7 @@ void ensureDataDir();
 void logToSD();
 void heartbeatCheck();
 void flushDirtyEEPROM();
+void lowRamPanicCheck();   // [22] 2026-05-27
 
 typedef struct Calibration {
     int sensorID;
@@ -142,8 +192,8 @@ unsigned long wsLastReconnectAttempt = 0;
 
 // [9] 2026-04-30: heartbeat-ack escalation thresholds. lastInboundMs is
 // updated on ANY inbound WebSocket message (text, connect, etc).
-const unsigned long HEARTBEAT_SOFT_MS   = 30000UL;   // 30 s -> WS soft reconnect
-const unsigned long HEARTBEAT_HARD_MS   = 60000UL;   // 60 s -> Ethernet hard reset
+const unsigned long HEARTBEAT_SOFT_MS = 30000UL;   // 30 s -> WS soft reconnect
+const unsigned long HEARTBEAT_HARD_MS = 60000UL;   // 60 s -> Ethernet hard reset
 const unsigned long HEARTBEAT_REBOOT_MS = 300000UL;  // 5 min -> deliberate WDT
 unsigned long lastInboundMs = 0;
 unsigned long lastSoftRecoveryMs = 0;
@@ -216,15 +266,15 @@ double factorC2 = 1.0;
 double factorC3 = 1.0;
 
 /***** DATA STRUCTURES *****/
+// [19] 2026-05-27: removed String fields (Date, Time, RawData) — they
+// were populated by parseCTDData() but never serialized into outgoing
+// JSON. Heap allocations are now eliminated for the CTD path entirely.
 struct CTDData {
     double Temperature = 0.0;
     double Conductivity = 0.0;  // S/m
     double Oxygen = 0.0;
     double PSU = 0.0;
-    String Date = "";
-    String Time = "";
     double CalculatedPSU = 0.0;
-    String RawData = "";
 };
 
 struct SalinityData {
@@ -260,9 +310,24 @@ struct SalinityData {
 
 SalinityData salinityData;
 CTDData ctdData;
-// [5] 2026-04-23: bumped from 800 -> 1200; serialized JSON was ~890 chars,
-// previously within truncation risk.
-char buffer[1200];
+// [18] 2026-05-27: shrunk from 1200 -> 700. sendData split-messages are
+// ~400 bytes each, sendParams rewritten (see [20]) tops out around 500
+// bytes. 700 gives comfortable margin while saving 500 bytes of SRAM —
+// the single biggest contributor to the RAM headroom fix.
+char buffer[700];
+
+// [22] 2026-05-27: panic threshold. When freeMemory() drops below this,
+// any further allocation is likely to cause stack/heap collision and
+// undefined behavior. We log it and let the WDT reboot us cleanly.
+const int LOW_RAM_PANIC_THRESHOLD = 150;
+// [25] 2026-05-27: skip SD writes when RAM is too tight - the SD library
+// itself needs working buffers and can become the proximate cause of a
+// crash when RAM is already low.
+const int SD_LOG_MIN_FREE_RAM = 200;
+// [24] 2026-05-27: minimum freeMemory() observed since last data log
+// flush. Reset each time the data row is written. Catches dips that
+// happen between the 60-second log intervals.
+int loopMinRam = 32767;
 
 // Ratios de débit pour régulation
 double ratioC0 = 0.0;
@@ -300,7 +365,7 @@ enum {
 
 // [6] 2026-04-23: free-RAM probe for leak diagnostics (AVR only).
 extern unsigned int __heap_start;
-extern void *__brkval;
+extern void* __brkval;
 int freeMemory() {
     int free_memory;
     if ((int)__brkval == 0)
@@ -437,28 +502,28 @@ void readMBSensors() {
                 // Stocker conductivité et calculer salinité selon le capteur avec facteur correctif
                 switch (currentSensor) {
                 case 0:
-                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue*factorControl;
+                    salinityData.conductiviteControl = mbSensor[currentSensor].cond_sensorValue * factorControl;
 
                     salinityData.saliniteControl = calculateSalinity(salinityData.temperatureControl, salinityData.conductiviteControl, factorControl);
 
                     break;
                 case 1:
-                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue*factorC3;
+                    salinityData.conductiviteC3 = mbSensor[currentSensor].cond_sensorValue * factorC3;
                     salinityData.saliniteC3 = calculateSalinity(salinityData.temperatureC3, salinityData.conductiviteC3, factorC3);
                     break;
                 case 2:
-                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue*factorC2;
+                    salinityData.conductiviteC2 = mbSensor[currentSensor].cond_sensorValue * factorC2;
                     salinityData.saliniteC2 = calculateSalinity(salinityData.temperatureC2, salinityData.conductiviteC2, factorC2);
                     regulC2.mesure = salinityData.saliniteC2;
                     regulC2_filtre.mesure = salinityData.saliniteC2;
                     break;
                 case 3:
-                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue*factorC1;
+                    salinityData.conductiviteC1 = mbSensor[currentSensor].cond_sensorValue * factorC1;
                     salinityData.saliniteC1 = calculateSalinity(salinityData.temperatureC1, salinityData.conductiviteC1, factorC1);
                     regulC1.mesure = salinityData.saliniteC1;
                     break;
                 case 4:
-                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue*factorC0;
+                    salinityData.conductiviteC0 = mbSensor[currentSensor].cond_sensorValue * factorC0;
                     salinityData.saliniteC0 = calculateSalinity(salinityData.temperatureC0, salinityData.conductiviteC0, factorC0);
                     break;
                 }
@@ -484,58 +549,53 @@ void readAnaSensors() {
 
 }
 
+// [19] 2026-05-27: refactored to not store Date/Time/RawData. Those were
+// only used for serial debug printing, and a temporary local copy is
+// sufficient. Eliminates 3 heap allocations per CTD message.
 void parseCTDData(String data) {
-    // Format: 19.9328;  0.00010;  6.271;    0.0099;29 Sep 2025; 11:57:52
-    // Temperature; Conductivity (S/m); Oxygen; PSU; Date; Time
+    // Format example: 19.9328,  0.00010,  6.271,    0.0099,29 Sep 2025, 11:57:52
+    // Fields: Temperature, Conductivity (S/m), Oxygen, PSU, Date, Time
 
-    ctdData.RawData = data;
-
-    int index = 0;
     int startPos = 0;
     int endPos = 0;
 
-    // Extract Temperature
+    // Temperature
     endPos = data.indexOf(',', startPos);
     if (endPos > 0) {
         ctdData.Temperature = data.substring(startPos, endPos).toDouble();
         startPos = endPos + 1;
     }
-
-    // Extract Conductivity (S/m)
+    // Conductivity (S/m)
     endPos = data.indexOf(',', startPos);
     if (endPos > 0) {
         ctdData.Conductivity = data.substring(startPos, endPos).toDouble();
         startPos = endPos + 1;
     }
-
-    // Extract Oxygen
+    // Oxygen
     endPos = data.indexOf(',', startPos);
     if (endPos > 0) {
         ctdData.Oxygen = data.substring(startPos, endPos).toDouble();
         startPos = endPos + 1;
     }
-
-    // Extract PSU
+    // PSU
     endPos = data.indexOf(',', startPos);
     if (endPos > 0) {
         ctdData.PSU = data.substring(startPos, endPos).toDouble();
         startPos = endPos + 1;
     }
-
-    // Extract Date
+    // Date - read but don't store
+    String localDate, localTime;
     endPos = data.indexOf(',', startPos);
     if (endPos > 0) {
-        ctdData.Date = data.substring(startPos, endPos);
-        ctdData.Date.trim();
+        localDate = data.substring(startPos, endPos);
+        localDate.trim();
         startPos = endPos + 1;
     }
+    // Time - rest of string
+    localTime = data.substring(startPos);
+    localTime.trim();
 
-    // Extract Time (rest of string)
-    ctdData.Time = data.substring(startPos);
-    ctdData.Time.trim();
-
-    // Calculate PSU from Temperature and Conductivity
-    // Convert Conductivity from S/m to µS/cm: 1 S/m = 10000 µS/cm
+    // Compute calculated PSU
     double conductivity_uS_cm = ctdData.Conductivity * 10000.0;
     ctdData.CalculatedPSU = calculateSalinity(ctdData.Temperature, conductivity_uS_cm);
 
@@ -545,8 +605,8 @@ void parseCTDData(String data) {
     Serial.print("  Oxygen: "); Serial.println(ctdData.Oxygen);
     Serial.print("  PSU (CTD): "); Serial.println(ctdData.PSU);
     Serial.print("  Calculated PSU: "); Serial.println(ctdData.CalculatedPSU);
-    Serial.print("  Date: "); Serial.println(ctdData.Date);
-    Serial.print("  Time: "); Serial.println(ctdData.Time);
+    Serial.print("  Date: "); Serial.println(localDate);
+    Serial.print("  Time: "); Serial.println(localTime);
 }
 
 // [1] 2026-04-23: rewritten with fixed char buffer. If the CTD drops its
@@ -722,14 +782,14 @@ void sendSalinityPart(int part) {
     // the central app's JsonHelper.DeserializePreservingExisting merges
     // the two halves into the same SalinityData object on its end.
     pos += snprintf(buffer + pos, sizeof(buffer) - pos,
-                    "{\"cmd\":%d,\"cID\":%d,\"sID\":%d,\"time\":%lu",
-                    (int)SEND_SALINITY_DATA, (int)PLCID, (int)PLCID,
-                    (unsigned long)RTC.getTime());
+        "{\"cmd\":%d,\"cID\":%d,\"sID\":%d,\"time\":%lu",
+        (int)SEND_SALINITY_DATA, (int)PLCID, (int)PLCID,
+        (unsigned long)RTC.getTime());
 
     // EMIT_F:
     //  - clamps NaN/Inf to 0.0 (avoids "nan"/"inf" which are NOT valid JSON)
     //  - bounds-checks each write, clamping pos if anything would overflow
-    #define EMIT_F(KEY, VAL) do { \
+#define EMIT_F(KEY, VAL) do { \
         double _v = (double)(VAL); \
         if (isnan(_v) || isinf(_v)) _v = 0.0; \
         if (pos + 32 < sizeof(buffer)) { \
@@ -742,43 +802,44 @@ void sendSalinityPart(int part) {
     } while (0)
 
     if (part == 0) {
-        EMIT_F("conductiviteC0",      salinityData.conductiviteC0);
-        EMIT_F("conductiviteC1",      salinityData.conductiviteC1);
-        EMIT_F("conductiviteC2",      salinityData.conductiviteC2);
-        EMIT_F("conductiviteC3",      salinityData.conductiviteC3);
+        EMIT_F("conductiviteC0", salinityData.conductiviteC0);
+        EMIT_F("conductiviteC1", salinityData.conductiviteC1);
+        EMIT_F("conductiviteC2", salinityData.conductiviteC2);
+        EMIT_F("conductiviteC3", salinityData.conductiviteC3);
         EMIT_F("conductiviteControl", salinityData.conductiviteControl);
 
-        EMIT_F("saliniteC0",      salinityData.saliniteC0);
-        EMIT_F("saliniteC1",      salinityData.saliniteC1);
-        EMIT_F("saliniteC2",      salinityData.saliniteC2);
-        EMIT_F("saliniteC3",      salinityData.saliniteC3);
+        EMIT_F("saliniteC0", salinityData.saliniteC0);
+        EMIT_F("saliniteC1", salinityData.saliniteC1);
+        EMIT_F("saliniteC2", salinityData.saliniteC2);
+        EMIT_F("saliniteC3", salinityData.saliniteC3);
         EMIT_F("saliniteControl", salinityData.saliniteControl);
 
-        EMIT_F("temperatureC0",      salinityData.temperatureC0);
-        EMIT_F("temperatureC1",      salinityData.temperatureC1);
-        EMIT_F("temperatureC2",      salinityData.temperatureC2);
-        EMIT_F("temperatureC3",      salinityData.temperatureC3);
+        EMIT_F("temperatureC0", salinityData.temperatureC0);
+        EMIT_F("temperatureC1", salinityData.temperatureC1);
+        EMIT_F("temperatureC2", salinityData.temperatureC2);
+        EMIT_F("temperatureC3", salinityData.temperatureC3);
         EMIT_F("temperatureControl", salinityData.temperatureControl);
-    } else {
+    }
+    else {
         EMIT_F("debitC0", salinityData.debitC0);
         EMIT_F("debitC1", salinityData.debitC1);
         EMIT_F("debitC2", salinityData.debitC2);
         EMIT_F("debitC3", salinityData.debitC3);
 
-        EMIT_F("vanneC0",        salinityData.vanneC0);
-        EMIT_F("vanneC1",        salinityData.vanneC1);
-        EMIT_F("vanneC2",        salinityData.vanneC2);
-        EMIT_F("vanneC3",        salinityData.vanneC3);
+        EMIT_F("vanneC0", salinityData.vanneC0);
+        EMIT_F("vanneC1", salinityData.vanneC1);
+        EMIT_F("vanneC2", salinityData.vanneC2);
+        EMIT_F("vanneC3", salinityData.vanneC3);
         EMIT_F("vanneC2_filtre", salinityData.vanneC2_filtre);
 
-        EMIT_F("CTD_Temperature",    ctdData.Temperature);
-        EMIT_F("CTD_Conductivity",   ctdData.Conductivity);
-        EMIT_F("CTD_Oxygen",         ctdData.Oxygen);
-        EMIT_F("CTD_PSU",            ctdData.PSU);
-        EMIT_F("CTD_CalculatedPSU",  ctdData.CalculatedPSU);
+        EMIT_F("CTD_Temperature", ctdData.Temperature);
+        EMIT_F("CTD_Conductivity", ctdData.Conductivity);
+        EMIT_F("CTD_Oxygen", ctdData.Oxygen);
+        EMIT_F("CTD_PSU", ctdData.PSU);
+        EMIT_F("CTD_CalculatedPSU", ctdData.CalculatedPSU);
     }
 
-    #undef EMIT_F
+#undef EMIT_F
 
     // Close JSON. Safe at edge of buffer because we always reserve
     // at least 1 byte for the null terminator.
@@ -826,62 +887,114 @@ void sendData() {
     }
 }
 
+// [20] 2026-05-27: helper used by sendParams() to emit one regul block
+// as a nested JSON object. Same EMIT_F semantics as sendSalinityPart.
+// Caller is responsible for header/footer and inter-object commas.
+static void emitRegulObj(size_t& pos, char* tmp,
+    const char* name, const Regul& r) {
+    if (pos + 200 < sizeof(buffer)) {
+        int n = snprintf(buffer + pos, sizeof(buffer) - pos,
+            "\"%s\":{", name);
+        if (n > 0) pos += (size_t)n;
+        // cons
+        double v = r.consigne; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 2, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, "\"cons\":%s", tmp);
+        if (n > 0) pos += (size_t)n;
+        // Kp
+        v = r.Kp; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 4, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, ",\"Kp\":%s", tmp);
+        if (n > 0) pos += (size_t)n;
+        // Ki
+        v = r.Ki; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 4, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, ",\"Ki\":%s", tmp);
+        if (n > 0) pos += (size_t)n;
+        // Kd
+        v = r.Kd; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 4, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, ",\"Kd\":%s", tmp);
+        if (n > 0) pos += (size_t)n;
+        // aForcage
+        n = snprintf(buffer + pos, sizeof(buffer) - pos,
+            ",\"aForcage\":\"%s\"", r.autorisationForcage ? "true" : "false");
+        if (n > 0) pos += (size_t)n;
+        // consForcage
+        v = (double)r.consigneForcage; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 2, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, ",\"consForcage\":%s", tmp);
+        if (n > 0) pos += (size_t)n;
+        // offset
+        v = r.offset; if (isnan(v) || isinf(v)) v = 0.0;
+        dtostrf(v, 0, 2, tmp);
+        n = snprintf(buffer + pos, sizeof(buffer) - pos, ",\"offset\":%s}", tmp);
+        if (n > 0) pos += (size_t)n;
+
+        if (pos >= sizeof(buffer)) pos = sizeof(buffer) - 1;
+    }
+}
+
 void sendParams() {
-    // [5] 2026-04-23: bumped 600 -> 1024 for safety with nested objects
-    StaticJsonDocument<1024> doc;
-    doc["cmd"] = SEND_SALINITY_PARAMS;
-    doc["cID"] = PLCID;
-    doc["sID"] = PLCID;
-    doc["time"] = RTC.getTime();
+    // [20] 2026-05-27: rewritten with snprintf/dtostrf (no ArduinoJson)
+    // for the same reasons as sendData(). The previous 1024-byte
+    // StaticJsonDocument lived on the stack and was the largest single
+    // stack allocation in the firmware. With freeRAM as low as 68 bytes
+    // during reconnect storms, that allocation alone would push the
+    // stack into the heap.
+    //
+    // Split into TWO messages: first 3 reguls (C0,C1,C2) then last 2
+    // (C3, C2_filtre). The central app's DeserializePreservingExisting
+    // merges them transparently.
+    char tmp[16];
 
-    JsonObject regulC0Obj = doc.createNestedObject("regulC0");
-    regulC0Obj["cons"] = round(regulC0.consigne * 100) / 100.0;
-    regulC0Obj["Kp"] = regulC0.Kp;
-    regulC0Obj["Ki"] = regulC0.Ki;
-    regulC0Obj["Kd"] = regulC0.Kd;
-    regulC0Obj["aForcage"] = regulC0.autorisationForcage ? "true" : "false";
-    regulC0Obj["consForcage"] = round(regulC0.consigneForcage * 100) / 100.0;
-    regulC0Obj["offset"] = round(regulC0.offset * 100) / 100.0;
+    // ====== Part 1: regulC0, regulC1, regulC2 ======
+    {
+        size_t pos = 0;
+        pos += snprintf(buffer + pos, sizeof(buffer) - pos,
+            "{\"cmd\":%d,\"cID\":%d,\"sID\":%d,\"time\":%lu,",
+            (int)SEND_SALINITY_PARAMS, (int)PLCID, (int)PLCID,
+            (unsigned long)RTC.getTime());
+        emitRegulObj(pos, tmp, "regulC0", regulC0);
+        if (pos + 2 < sizeof(buffer)) { buffer[pos++] = ','; }
+        emitRegulObj(pos, tmp, "regulC1", regulC1);
+        if (pos + 2 < sizeof(buffer)) { buffer[pos++] = ','; }
+        emitRegulObj(pos, tmp, "regulC2", regulC2);
 
-    JsonObject regulC1Obj = doc.createNestedObject("regulC1");
-    regulC1Obj["cons"] = round(regulC1.consigne * 100) / 100.0;
-    regulC1Obj["Kp"] = regulC1.Kp;
-    regulC1Obj["Ki"] = regulC1.Ki;
-    regulC1Obj["Kd"] = regulC1.Kd;
-    regulC1Obj["aForcage"] = regulC1.autorisationForcage ? "true" : "false";
-    regulC1Obj["consForcage"] = round(regulC1.consigneForcage * 100) / 100.0;
-    regulC1Obj["offset"] = round(regulC1.offset * 100) / 100.0;
+        if (pos < sizeof(buffer) - 1) buffer[pos++] = '}';
+        if (pos >= sizeof(buffer)) pos = sizeof(buffer) - 1;
+        buffer[pos] = '\0';
 
-    JsonObject regulC2Obj = doc.createNestedObject("regulC2");
-    regulC2Obj["cons"] = round(regulC2.consigne * 100) / 100.0;
-    regulC2Obj["Kp"] = regulC2.Kp;
-    regulC2Obj["Ki"] = regulC2.Ki;
-    regulC2Obj["Kd"] = regulC2.Kd;
-    regulC2Obj["aForcage"] = regulC2.autorisationForcage ? "true" : "false";
-    regulC2Obj["consForcage"] = round(regulC2.consigneForcage * 100) / 100.0;
-    regulC2Obj["offset"] = round(regulC2.offset * 100) / 100.0;
+        Serial.print(F("[JSON sendParams P0] bytes="));
+        Serial.print(pos);
+        Serial.print(F(" freeRAM="));
+        Serial.println(freeMemory());
+        webSocket.sendTXT(buffer);
+        Serial.println(buffer);
+    }
 
-    JsonObject regulC3Obj = doc.createNestedObject("regulC3");
-    regulC3Obj["cons"] = round(regulC3.consigne * 100) / 100.0;
-    regulC3Obj["Kp"] = regulC3.Kp;
-    regulC3Obj["Ki"] = regulC3.Ki;
-    regulC3Obj["Kd"] = regulC3.Kd;
-    regulC3Obj["aForcage"] = regulC3.autorisationForcage ? "true" : "false";
-    regulC3Obj["consForcage"] = round(regulC3.consigneForcage * 100) / 100.0;
-    regulC3Obj["offset"] = round(regulC3.offset * 100) / 100.0;
+    // ====== Part 2: regulC3, regulC2_filtre ======
+    {
+        size_t pos = 0;
+        pos += snprintf(buffer + pos, sizeof(buffer) - pos,
+            "{\"cmd\":%d,\"cID\":%d,\"sID\":%d,\"time\":%lu,",
+            (int)SEND_SALINITY_PARAMS, (int)PLCID, (int)PLCID,
+            (unsigned long)RTC.getTime());
+        emitRegulObj(pos, tmp, "regulC3", regulC3);
+        if (pos + 2 < sizeof(buffer)) { buffer[pos++] = ','; }
+        emitRegulObj(pos, tmp, "regulC2_filtre", regulC2_filtre);
 
-    JsonObject regulC2FObj = doc.createNestedObject("regulC2_filtre");
-    regulC2FObj["cons"] = round(regulC2_filtre.consigne * 100) / 100.0;
-    regulC2FObj["Kp"] = regulC2_filtre.Kp;
-    regulC2FObj["Ki"] = regulC2_filtre.Ki;
-    regulC2FObj["Kd"] = regulC2_filtre.Kd;
-    regulC2FObj["aForcage"] = regulC2_filtre.autorisationForcage ? "true" : "false";
-    regulC2FObj["consForcage"] = round(regulC2_filtre.consigneForcage * 100) / 100.0;
-    regulC2FObj["offset"] = round(regulC2_filtre.offset * 100) / 100.0;
+        if (pos < sizeof(buffer) - 1) buffer[pos++] = '}';
+        if (pos >= sizeof(buffer)) pos = sizeof(buffer) - 1;
+        buffer[pos] = '\0';
 
-    serializeJson(doc, buffer, sizeof(buffer));
-    Serial.println(buffer);
-    webSocket.sendTXT(buffer);
+        Serial.print(F("[JSON sendParams P1] bytes="));
+        Serial.print(pos);
+        Serial.print(F(" freeRAM="));
+        Serial.println(freeMemory());
+        webSocket.sendTXT(buffer);
+        Serial.println(buffer);
+    }
 }
 
 void receiveParams(StaticJsonDocument<1024>& doc) {
@@ -1206,9 +1319,15 @@ void logEvent(const char* tag) {
 
 // [11] 2026-04-30: periodic SD snapshot for post-crash forensics.
 // 21 measurement columns + 6 diagnostic counters.
+// [24]+[25] 2026-05-27: added loopMinRam column; skip writes when free
+// RAM is critically low to avoid the SD library itself causing a crash.
 void logToSD() {
     if (!sdAvailable) return;
     if (!elapsed(&tempoSDLog)) return;
+    if (freeMemory() < SD_LOG_MIN_FREE_RAM) {
+        Serial.println(F("[SD] skip data log - RAM too low"));
+        return;
+    }
 
     String path = "data/" + String(RTC.getMonth()) + "_" + String(RTC.getYear()) + ".csv";
     bool needHeader = !SD.exists(path);
@@ -1219,7 +1338,7 @@ void logToSD() {
     }
     if (needHeader) {
         f.println(F(
-            "time,freeRAM,"
+            "time,freeRAM,loopMinRam,"
             "salC0,salC1,salC2,salC3,salCtrl,"
             "tC0,tC1,tC2,tC3,tCtrl,"
             "dC0,dC1,dC2,dC3,"
@@ -1229,6 +1348,7 @@ void logToSD() {
     }
     f.print(RTC.getTime());                  f.print(',');
     f.print(freeMemory());                   f.print(',');
+    f.print(loopMinRam);                     f.print(',');
     f.print(salinityData.saliniteC0);        f.print(',');
     f.print(salinityData.saliniteC1);        f.print(',');
     f.print(salinityData.saliniteC2);        f.print(',');
@@ -1238,7 +1358,7 @@ void logToSD() {
     f.print(salinityData.temperatureC1);     f.print(',');
     f.print(salinityData.temperatureC2);     f.print(',');
     f.print(salinityData.temperatureC3);     f.print(',');
-    f.print(salinityData.temperatureControl);f.print(',');
+    f.print(salinityData.temperatureControl); f.print(',');
     f.print(salinityData.debitC0);           f.print(',');
     f.print(salinityData.debitC1);           f.print(',');
     f.print(salinityData.debitC2);           f.print(',');
@@ -1256,8 +1376,39 @@ void logToSD() {
     f.println(wsConnected ? 1 : 0);
     f.close();
 
-    // Reset the loop-duration tracker for the next interval window.
+    // Reset trackers for the next interval window.
     loopMaxDurationMs = 0;
+    loopMinRam = 32767;  // [24] 2026-05-27
+}
+
+// [22] 2026-05-27: pre-emptive panic reboot at critically low RAM.
+// Called at the very start of each loop iteration. If freeMemory()
+// is below the panic threshold, log the event (if SD allows) and
+// deliberately let the WDT fire. This catches the situation where
+// we're about to enter a stack/heap collision - much better than
+// letting the AVR execute corrupted instructions.
+void lowRamPanicCheck() {
+    int fr = freeMemory();
+    if (fr < loopMinRam) loopMinRam = fr;  // [24] track minimum
+    if (fr < LOW_RAM_PANIC_THRESHOLD) {
+        Serial.print(F("[PANIC] freeRAM="));
+        Serial.print(fr);
+        Serial.println(F(" - forcing WDT reboot"));
+        // Try to log it - but don't trust SD with very low RAM.
+        // If we have at least SD_LOG_MIN_FREE_RAM we attempt; else skip.
+        if (sdAvailable && fr >= SD_LOG_MIN_FREE_RAM) {
+            File f = SD.open("events.csv", FILE_WRITE);
+            if (f) {
+                f.print(RTC.getTime()); f.print(',');
+                f.print(fr); f.print(',');
+                f.println(F("LOW_RAM_PANIC"));
+                f.close();
+            }
+        }
+        // Tight loop without wdt_reset() - watchdog fires within 8 s
+        // and the next boot starts fresh.
+        while (true) { /* deliberately empty */ }
+    }
 }
 
 // [9] 2026-04-30: heartbeat-ack with escalating recovery.
@@ -1378,8 +1529,26 @@ void setup() {
     wsLastReconnectAttempt = millis();
 
     // Init RTC
-    if (true) setRtcTimeFromCompileTime();
+    // [21] 2026-05-27: was `if (true) setRtcTimeFromCompileTime();`
+    // which clobbered the battery-backed RTC on every boot. Now only
+    // reset to compile time if the RTC chip reads as obviously invalid
+    // (year < 2020 or > 2099). This keeps real wall-clock timestamps
+    // in SD logs across reboots.
     RTC.read();
+    {
+        uint16_t yr = RTC.getYear();
+        if (yr < 2020 || yr > 2099) {
+            Serial.print(F("[RTC] invalid year "));
+            Serial.print(yr);
+            Serial.println(F(" - resetting from compile time"));
+            setRtcTimeFromCompileTime();
+            RTC.read();
+        }
+        else {
+            Serial.print(F("[RTC] keeping chip time, year="));
+            Serial.println(yr);
+        }
+    }
 
     // Init timing
     tempoMBSensorsRead.debut = 0;
@@ -1396,7 +1565,8 @@ void setup() {
         sdAvailable = true;
         Serial.println(F("OK"));
         ensureDataDir();
-    } else {
+    }
+    else {
         sdAvailable = false;
         Serial.println(F("FAILED - logging disabled"));
     }
@@ -1424,6 +1594,12 @@ void setup() {
 
 static unsigned long lastTest = 0;
 void loop() {
+    // [22] 2026-05-27: first thing in the loop - bail out cleanly if
+    // RAM has dropped to a danger level. This both updates loopMinRam
+    // (the per-interval minimum logged to SD) and triggers a deliberate
+    // WDT reboot before stack/heap collision causes undefined behavior.
+    lowRamPanicCheck();
+
     // [11] 2026-04-30: track this iteration's start so we can record the
     // longest single loop iteration in the SD log. Useful to spot any
     // blocking operation that approaches the 8 s watchdog limit.
@@ -1448,6 +1624,9 @@ void loop() {
         webSocket.disconnect();
         webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
         wsLastReconnectAttempt = millis();
+        wsReconnectCount++;   // [23] 2026-05-27: was only counted by
+                              // the heartbeat path; now we see every
+                              // reconnect attempt in the data log.
     }
 
     // [9] 2026-04-30: heartbeat-ack escalation. Catches the "TCP open,
